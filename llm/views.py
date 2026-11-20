@@ -10,6 +10,14 @@ from llm.service import GUIDED_MODES, generate_reflection
 
 
 @login_required
+def chat_default_view(request):
+    from frameworks.views import _get_user_framework
+
+    framework = _get_user_framework(request.user)
+    return redirect("llm:chat", framework_id=framework.id)
+
+
+@login_required
 def chat_view(request, framework_id):
     framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
     llm_config = getattr(request.user, "llm_config", None)

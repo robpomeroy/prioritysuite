@@ -3,20 +3,50 @@
 
 {% block content %}
 <div class="row mb-4 align-items-center">
-    <div class="col-md-7">
-        <h2 class="mb-1 text-terracotta d-flex align-items-center">
-            <span>{{ framework.name }}</span>
+    <div class="col-lg-6">
+        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle text-terracotta fw-bold fs-5 px-3 py-1 d-flex align-items-center" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span>{{ framework.name }}</span>
+                </button>
+                <ul class="dropdown-menu shadow-sm">
+                    <li><h6 class="dropdown-header small text-uppercase">Your Frameworks</h6></li>
+                    {% for uf in user_frameworks %}
+                        <li>
+                            <a class="dropdown-item {% if uf.id == framework.id %}active fw-semibold{% endif %}" href="{% url 'frameworks:workspace_detail' uf.id %}">
+                                {{ uf.name }}{% if uf.is_sample %} <span class="badge bg-amber text-white ms-1">Sample</span>{% endif %}
+                            </a>
+                        </li>
+                    {% endfor %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item text-terracotta" href="{% url 'frameworks:framework_create' %}">
+                            + New Framework
+                        </a>
+                    </li>
+                </ul>
+            </div>
             {% if framework.is_sample %}
-                <span class="badge bg-amber text-white fs-6 ms-3">Sample Content</span>
+                <span class="badge bg-amber text-white">Sample Content</span>
             {% endif %}
-        </h2>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-link text-muted p-1" data-bs-toggle="dropdown" title="Framework Options">⚙️</button>
+                <ul class="dropdown-menu shadow-sm">
+                    <li><a class="dropdown-item small" href="{% url 'frameworks:framework_edit' framework.id %}">Edit Framework</a></li>
+                    <li><a class="dropdown-item small" href="{% url 'frameworks:framework_create' %}">+ Create Another Framework</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item small text-danger" href="{% url 'frameworks:framework_delete' framework.id %}">Delete Framework</a></li>
+                </ul>
+            </div>
+        </div>
         <p class="text-muted small mb-0">{{ framework.description|default:"Personal priorities organized by Domains → Whys → Objectives → Goals" }}</p>
     </div>
-    <div class="col-md-5 text-md-end mt-3 mt-md-0">
-        <div class="btn-group shadow-sm">
+    <div class="col-lg-6 text-lg-end mt-3 mt-lg-0">
+        <div class="btn-group shadow-sm mb-2 mb-md-0">
             <a href="{% url 'frameworks:domain_create' framework.id %}" class="btn btn-outline-primary btn-sm">+ Add Domain</a>
             <a href="{% url 'frameworks:objective_create' framework.id %}" class="btn btn-outline-secondary btn-sm">+ Add Objective</a>
             <a href="{% url 'frameworks:goal_create' framework.id %}" class="btn btn-outline-secondary btn-sm">+ Add Goal</a>
+            <a href="{% url 'llm:chat' framework.id %}" class="btn btn-outline-primary btn-sm" title="Consult Thinking Partner on this framework">💡 Thinking Partner</a>
             <a href="{% url 'exports:export_framework' framework.id %}" class="btn btn-outline-dark btn-sm">Export Markdown</a>
         </div>
         {% if framework.is_sample %}

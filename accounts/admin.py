@@ -20,12 +20,15 @@ class UserLLMConfigAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        if request.user.is_superuser:
-            return qs
         return qs.filter(user=request.user)
 
+    def has_view_permission(self, request, obj=None):
+        if obj is not None and obj.user != request.user:
+            return False
+        return super().has_view_permission(request, obj)
+
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == "user" and not request.user.is_superuser:
+        if db_field.name == "user":
             from django.contrib.auth import get_user_model
 
             User = get_user_model()
@@ -34,22 +37,19 @@ class UserLLMConfigAdmin(admin.ModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def save_model(self, request, obj, form, change):
-        if not request.user.is_superuser:
-            obj.user = request.user
+        obj.user = request.user
         super().save_model(request, obj, form, change)
 
     def has_add_permission(self, request):
-        if not request.user.is_superuser:
-            # A user only has at most one UserLLMConfig (OneToOne)
-            return not UserLLMConfig.objects.filter(user=request.user).exists()
-        return super().has_add_permission(request)
+        # A user only has at most one UserLLMConfig (OneToOne)
+        return not UserLLMConfig.objects.filter(user=request.user).exists()
 
     def has_change_permission(self, request, obj=None):
-        if obj is not None and not request.user.is_superuser and obj.user != request.user:
+        if obj is not None and obj.user != request.user:
             return False
         return super().has_change_permission(request, obj)
 
     def has_delete_permission(self, request, obj=None):
-        if obj is not None and not request.user.is_superuser and obj.user != request.user:
+        if obj is not None and obj.user != request.user:
             return False
         return super().has_delete_permission(request, obj)

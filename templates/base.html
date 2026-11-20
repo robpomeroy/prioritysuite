@@ -36,6 +36,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'frameworks:review' %}">Periodic Review</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'llm:chat_default' %}">Thinking Partner</a>
+                    </li>
                 </ul>
                 {% endif %}
                 <div class="d-flex align-items-center gap-3 ms-auto">
@@ -51,6 +54,9 @@
                                 {{ user.username }}
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                {% if user.is_staff or user.is_superuser %}
+                                    <li><a class="dropdown-item" href="{% url 'accounts:user_list' %}">User Administration</a></li>
+                                {% endif %}
                                 <li><a class="dropdown-item" href="{% url 'accounts:settings' %}">Settings & LLM BYOK</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
@@ -87,7 +93,7 @@
 
     <footer class="footer mt-auto py-3 border-top text-center text-muted small" style="background-color: var(--bs-card-bg);">
         <div class="container">
-            <span>PrioritySuite — User-defined personal priorities & decision-making framework.</span>
+            <span>PrioritySuite v{{ app_version }} — User-defined personal priorities & decision-making framework.</span>
         </div>
     </footer>
 

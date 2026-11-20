@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from django import forms
 from django.conf import settings
+from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -294,3 +295,148 @@ class UserLLMConfigForm(forms.ModelForm):
             except ValidationError as e:
                 self.add_error("api_base", e)
         return cleaned_data
+
+
+class UserProfileForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name", "email")
+        widgets = {
+            "first_name": forms.TextInput(attrs={"class": "form-control"}),
+            "last_name": forms.TextInput(attrs={"class": "form-control"}),
+            "email": forms.EmailInput(attrs={"class": "form-control"}),
+        }
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip()
+        if email:
+            qs = User.objects.filter(email__iexact=email)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise ValidationError("A user with that email address already exists.")
+        return email
+
+
+class AdminUserCreateForm(forms.ModelForm):
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={"class": "form-control"}),
+        help_text="Password must satisfy security requirements.",
+    )
+    password_confirm = forms.CharField(
+        widget=forms.PasswordInput(attrs={"class": "form-control"}),
+        label="Confirm password",
+    )
+
+    class Meta:
+        model = User
+        fields = (
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+        )
+        widgets = {
+            "username": forms.TextInput(attrs={"class": "form-control"}),
+            "first_name": forms.TextInput(attrs={"class": "form-control"}),
+            "last_name": forms.TextInput(attrs={"class": "form-control"}),
+            "email": forms.EmailInput(attrs={"class": "form-control"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_staff": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_superuser": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, current_user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_user = current_user
+        if current_user and not current_user.is_superuser:
+            if "is_superuser" in self.fields:
+                self.fields["is_superuser"].disabled = True
+                self.fields["is_superuser"].help_text = (
+                    "Only superusers can grant superuser permissions."
+                )
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip()
+        if email and User.objects.filter(email__iexact=email).exists():
+            raise ValidationError("A user with that email address already exists.")
+        return email
+
+    def clean(self):
+        cleaned_data = super().clean()
+        p1 = cleaned_data.get("password")
+        p2 = cleaned_data.get("password_confirm")
+        if p1 and p2:
+            if p1 != p2:
+                self.add_error("password_confirm", "Passwords do not match.")
+            else:
+                temp_user = User(
+                    username=cleaned_data.get("username", ""),
+                    email=cleaned_data.get("email", ""),
+                )
+                try:
+                    validate_password(p1, user=temp_user)
+                except ValidationError as error:
+                    self.add_error("password", error)
+        return cleaned_data
+
+
+class AdminUserEditForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = (
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+        )
+        widgets = {
+            "username": forms.TextInput(attrs={"class": "form-control"}),
+            "first_name": forms.TextInput(attrs={"class": "form-control"}),
+            "last_name": forms.TextInput(attrs={"class": "form-control"}),
+            "email": forms.EmailInput(attrs={"class": "form-control"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_staff": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_superuser": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, current_user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_user = current_user
+        if current_user and not current_user.is_superuser:
+            if "is_superuser" in self.fields:
+                self.fields["is_superuser"].disabled = True
+                self.fields["is_superuser"].help_text = (
+                    "Only superusers can grant superuser permissions."
+                )
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip()
+        if email:
+            qs = User.objects.filter(email__iexact=email)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise ValidationError("A user with that email address already exists.")
+        return email
+
+
+class CustomPasswordChangeForm(PasswordChangeForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update({"class": "form-control"})
+
+
+class CustomSetPasswordForm(SetPasswordForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update({"class": "form-control"})
+

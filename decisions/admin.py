@@ -12,20 +12,19 @@ class DecisionRecordAdmin(UserOwnedAdmin):
     search_fields = ("title", "proposal_description", "decision_outcome")
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == "framework" and not request.user.is_superuser:
+        if db_field.name == "framework":
             kwargs["queryset"] = Framework.objects.filter(owner=request.user)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
-        if not request.user.is_superuser:
-            if db_field.name == "affected_domains":
-                kwargs["queryset"] = Domain.objects.filter(framework__owner=request.user)
-            elif db_field.name == "relevant_whys":
-                kwargs["queryset"] = Why.objects.filter(domain__framework__owner=request.user)
-            elif db_field.name in ("supporting_objectives", "conflicting_objectives"):
-                kwargs["queryset"] = Objective.objects.filter(
-                    primary_domain__framework__owner=request.user
-                )
+        if db_field.name == "affected_domains":
+            kwargs["queryset"] = Domain.objects.filter(framework__owner=request.user)
+        elif db_field.name == "relevant_whys":
+            kwargs["queryset"] = Why.objects.filter(domain__framework__owner=request.user)
+        elif db_field.name in ("supporting_objectives", "conflicting_objectives"):
+            kwargs["queryset"] = Objective.objects.filter(
+                primary_domain__framework__owner=request.user
+            )
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 
 
@@ -35,9 +34,8 @@ class LLMReflectionLogAdmin(UserOwnedAdmin):
     readonly_fields = ("created_at",)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if not request.user.is_superuser:
-            if db_field.name == "framework":
-                kwargs["queryset"] = Framework.objects.filter(owner=request.user)
-            elif db_field.name == "decision":
-                kwargs["queryset"] = DecisionRecord.objects.filter(framework__owner=request.user)
+        if db_field.name == "framework":
+            kwargs["queryset"] = Framework.objects.filter(owner=request.user)
+        elif db_field.name == "decision":
+            kwargs["queryset"] = DecisionRecord.objects.filter(framework__owner=request.user)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
