@@ -529,8 +529,8 @@ def test_crypto_legacy_sha256_backward_compatibility(settings):
         hashlib.sha256(direct_key.encode("utf-8")).digest()
     )
     legacy_direct_cipher = Fernet(legacy_direct_key)
-    legacy_direct_ciphertext = (
-        legacy_direct_cipher.encrypt(secret_text.encode("utf-8")).decode("utf-8")
+    legacy_direct_ciphertext = legacy_direct_cipher.encrypt(secret_text.encode("utf-8")).decode(
+        "utf-8"
     )
     decrypted_direct = decrypt_value(legacy_direct_ciphertext)
     assert decrypted_direct == secret_text
@@ -1716,9 +1716,9 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
             is True
         )
         assert (
-            generate_reflection(
-                "ctx", "prompt", "gemini", "gemini-1.5-flash", api_key="test-key"
-            )[0]
+            generate_reflection("ctx", "prompt", "gemini", "gemini-1.5-flash", api_key="test-key")[
+                0
+            ]
             is True
         )
         assert (
@@ -1728,10 +1728,7 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
             is True
         )
         assert (
-            generate_reflection(
-                "ctx", "prompt", "openai", "gpt-4o", api_key="test-key"
-            )[0]
-            is True
+            generate_reflection("ctx", "prompt", "openai", "gpt-4o", api_key="test-key")[0] is True
         )
 
         # Custom model containing slashes (e.g. meta-llama/Llama-3-8B-Instruct) gets openai/ prefix
@@ -2333,9 +2330,7 @@ def test_dns_rebinding_ssrf_prevention():
     # IPv4-mapped loopback rebinding rejection: external host resolving to ::ffff:127.0.0.1 blocked
     with patch(
         "socket.getaddrinfo",
-        return_value=[
-            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::ffff:127.0.0.1", 11434))
-        ],
+        return_value=[(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::ffff:127.0.0.1", 11434))],
     ):
         with pytest.raises(ValueError, match="Outbound connection blocked"):
             transport.handle_request(req_v4)
@@ -2839,9 +2834,7 @@ def test_decision_assessment_multi_framework_creation(client, user):
     assert dec.framework == fw2
 
     # Attempting to select another user's framework returns 404
-    other = User.objects.create_user(
-        username="stranger", email="st@example.com", password="pwd"
-    )
+    other = User.objects.create_user(username="stranger", email="st@example.com", password="pwd")
     fw_other = Framework.objects.create(owner=other, name="Stranger FW")
     forbidden_resp = client.get(f"/decisions/create/?framework={fw_other.id}")
     assert forbidden_resp.status_code == 404
@@ -2939,4 +2932,3 @@ def test_version_display(client, user):
     assert resp.status_code == 200
     content = resp.content.decode()
     assert "PrioritySuite v0.2.0" in content
-
