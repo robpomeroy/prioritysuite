@@ -1,7 +1,7 @@
 from django import forms
 
 from decisions.models import DecisionRecord
-from frameworks.models import Objective, Why
+from frameworks.models import Domain, Objective, Why
 
 
 class DecisionRecordForm(forms.ModelForm):
@@ -89,3 +89,8 @@ class DecisionRecordForm(forms.ModelForm):
             self.fields["conflicting_objectives"].queryset = Objective.objects.filter(
                 primary_domain__framework=framework
             ).select_related("primary_domain")
+        else:
+            self.fields["affected_domains"].queryset = Domain.objects.none()
+            self.fields["relevant_whys"].queryset = Why.objects.none()
+            self.fields["supporting_objectives"].queryset = Objective.objects.none()
+            self.fields["conflicting_objectives"].queryset = Objective.objects.none()

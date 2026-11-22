@@ -2839,6 +2839,21 @@ def test_decision_assessment_multi_framework_creation(client, user):
     forbidden_resp = client.get(f"/decisions/create/?framework={fw_other.id}")
     assert forbidden_resp.status_code == 404
 
+    # Non-integer / unicode digit conversion returns 404
+    unicode_resp = client.get("/decisions/create/?framework=%C2%B2")
+    assert unicode_resp.status_code == 404
+    alpha_resp = client.get("/decisions/create/?framework=invalid_id")
+    assert alpha_resp.status_code == 404
+
+    # DecisionRecordForm without framework scopes relational fields to none()
+    from decisions.forms import DecisionRecordForm
+
+    empty_form = DecisionRecordForm(framework=None)
+    assert empty_form.fields["affected_domains"].queryset.count() == 0
+    assert empty_form.fields["relevant_whys"].queryset.count() == 0
+    assert empty_form.fields["supporting_objectives"].queryset.count() == 0
+    assert empty_form.fields["conflicting_objectives"].queryset.count() == 0
+
 
 def test_admin_related_only_filter_privacy(user, other_user):
     from django.contrib.admin.sites import AdminSite

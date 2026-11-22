@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from decisions.forms import DecisionRecordForm
@@ -19,16 +20,23 @@ def decision_list_view(request):
 
 @login_required
 def decision_create_view(request):
-    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
-    if not user_frameworks.exists():
-        framework = Framework.objects.create(owner=request.user, name="My Priorities")
-        user_frameworks = Framework.objects.filter(owner=request.user)
+    fw_param = request.POST.get("framework") or request.GET.get("framework")
+    if fw_param is not None and str(fw_param).strip() != "":
+        try:
+            fw_pk = int(fw_param)
+        except (ValueError, TypeError):
+            raise Http404("Invalid framework identifier.") from None
+        framework = get_object_or_404(Framework, id=fw_pk, owner=request.user)
     else:
-        fw_id = request.POST.get("framework") or request.GET.get("framework")
-        if fw_id and str(fw_id).isdigit():
-            framework = get_object_or_404(Framework, id=int(fw_id), owner=request.user)
-        else:
-            framework = user_frameworks.first()
+        framework = Framework.objects.filter(owner=request.user).order_by("name").first()
+        if not framework:
+            framework = Framework.objects.create(owner=request.user, name="My Priorities")
+
+    if not framework:
+        messages.error(request, "No framework available. Please create a framework first.")
+        return redirect("frameworks:framework_create")
+
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
 
     if request.method == "POST":
         form = DecisionRecordForm(request.POST, framework=framework)
