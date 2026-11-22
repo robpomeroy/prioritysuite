@@ -14,26 +14,26 @@
                     {% csrf_token %}
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Username</label>
-                            <input type="text" class="form-control" value="{{ request.user.username }}" disabled readonly>
+                            <label class="form-label small fw-semibold" for="id_profile_username">Username</label>
+                            <input type="text" id="id_profile_username" class="form-control" value="{{ request.user.username }}" disabled readonly>
                             <div class="form-text small">Usernames cannot be changed.</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Email Address</label>
+                            <label class="form-label small fw-semibold" for="{{ profile_form.email.id_for_label }}">Email Address</label>
                             {{ profile_form.email }}
                             {% if profile_form.email.errors %}
                                 <div class="text-danger small mt-1">{{ profile_form.email.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">First Name</label>
+                            <label class="form-label small fw-semibold" for="{{ profile_form.first_name.id_for_label }}">First Name</label>
                             {{ profile_form.first_name }}
                             {% if profile_form.first_name.errors %}
                                 <div class="text-danger small mt-1">{{ profile_form.first_name.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Last Name</label>
+                            <label class="form-label small fw-semibold" for="{{ profile_form.last_name.id_for_label }}">Last Name</label>
                             {{ profile_form.last_name }}
                             {% if profile_form.last_name.errors %}
                                 <div class="text-danger small mt-1">{{ profile_form.last_name.errors|striptags }}</div>
@@ -57,21 +57,21 @@
                     {% csrf_token %}
                     <div class="row g-3">
                         <div class="col-12">
-                            <label class="form-label small fw-semibold">Current Password</label>
+                            <label class="form-label small fw-semibold" for="{{ password_form.old_password.id_for_label }}">Current Password</label>
                             {{ password_form.old_password }}
                             {% if password_form.old_password.errors %}
                                 <div class="text-danger small mt-1">{{ password_form.old_password.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">New Password</label>
+                            <label class="form-label small fw-semibold" for="{{ password_form.new_password1.id_for_label }}">New Password</label>
                             {{ password_form.new_password1 }}
                             {% if password_form.new_password1.errors %}
                                 <div class="text-danger small mt-1">{{ password_form.new_password1.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Confirm New Password</label>
+                            <label class="form-label small fw-semibold" for="{{ password_form.new_password2.id_for_label }}">Confirm New Password</label>
                             {{ password_form.new_password2 }}
                             {% if password_form.new_password2.errors %}
                                 <div class="text-danger small mt-1">{{ password_form.new_password2.errors|striptags }}</div>
@@ -95,21 +95,21 @@
                     PrioritySuite is designed to work completely offline without an LLM. If you choose to enable an AI thinking partner, it operates strictly as a non-prescriptive facilitator. API keys are encrypted at rest.
                 </p>
 
-                <form method="post">
+                <form method="post" action="{% url 'accounts:settings' %}">
                     {% csrf_token %}
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">LLM Provider</label>
+                            <label class="form-label small fw-semibold" for="{{ form.provider.id_for_label }}">LLM Provider</label>
                             {{ form.provider }}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Model Identifier</label>
+                            <label class="form-label small fw-semibold" for="{{ form.model_name.id_for_label }}">Model Identifier</label>
                             {{ form.model_name }}
                             <div class="form-text small">e.g. <code>ollama/llama3.1</code>, <code>openrouter/anthropic/claude-3.5-sonnet</code>, <code>gpt-4o</code>, <code>claude-3-5-sonnet-20241022</code>, <code>gemini-2.0-flash</code></div>
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small fw-semibold">API Base URL</label>
+                            <label class="form-label small fw-semibold" for="{{ form.api_base.id_for_label }}">API Base URL</label>
                             {{ form.api_base }}
                             {% if form.api_base.errors %}
                                 <div class="text-danger small mt-1">{{ form.api_base.errors|striptags }}</div>
@@ -118,7 +118,7 @@
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small fw-semibold">API Key</label>
+                            <label class="form-label small fw-semibold" for="{{ form.raw_api_key.id_for_label }}">API Key</label>
                             {{ form.raw_api_key }}
                             {% if form.raw_api_key.errors %}
                                 <div class="text-danger small mt-1">{{ form.raw_api_key.errors|striptags }}</div>
@@ -129,7 +129,7 @@
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Theme Mode</label>
+                            <label class="form-label small fw-semibold" for="{{ form.theme_preference.id_for_label }}">Theme Mode</label>
                             {{ form.theme_preference }}
                         </div>
 

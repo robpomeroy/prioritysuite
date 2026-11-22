@@ -12,6 +12,19 @@
             <div class="card-body p-4">
                 <form method="post">
                     {% csrf_token %}
+                    {% if user_frameworks and user_frameworks|length > 1 %}
+                        <div class="mb-4 pb-3 border-bottom">
+                            <label class="form-label fw-bold" for="id_decision_framework">Target Framework</label>
+                            <select id="id_decision_framework" name="framework" class="form-select" onchange="window.location.href='?framework=' + this.value;">
+                                {% for uf in user_frameworks %}
+                                    <option value="{{ uf.id }}" {% if uf.id == framework.id %}selected{% endif %}>{{ uf.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text small">Domains, Whys, and Objectives in this assessment are drawn from the selected framework.</div>
+                        </div>
+                    {% elif framework %}
+                        <input type="hidden" name="framework" value="{{ framework.id }}">
+                    {% endif %}
                     
                     <!-- 1. Proposal -->
                     <div class="mb-4">

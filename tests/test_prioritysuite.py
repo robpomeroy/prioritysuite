@@ -2775,19 +2775,112 @@ def test_staff_cannot_modify_or_delete_superusers(client, user, other_user):
     other_user.is_superuser = True
     other_user.save()
 
+    ordinary_user = User.objects.create_user(
+        username="ordinary", email="ord@example.com", password="password123"
+    )
+
     client.force_login(user)
 
     # Cannot edit superuser
     resp = client.get(f"/accounts/users/{other_user.id}/edit/")
     assert resp.status_code == 403
 
-    # Cannot reset superuser password
+    # Staff cannot reset superuser password
     resp = client.get(f"/accounts/users/{other_user.id}/password/")
     assert resp.status_code == 403
+
+    # Staff cannot reset ordinary user password
+    resp = client.get(f"/accounts/users/{ordinary_user.id}/password/")
+    assert resp.status_code == 403
+    post_resp = client.post(
+        f"/accounts/users/{ordinary_user.id}/password/",
+        {"new_password1": "TryHack123!", "new_password2": "TryHack123!"},
+    )
+    assert post_resp.status_code == 403
 
     # Cannot delete superuser
     resp = client.post(f"/accounts/users/{other_user.id}/delete/")
     assert resp.status_code == 403
+
+
+def test_decision_assessment_multi_framework_creation(client, user):
+    client.force_login(user)
+    fw1 = Framework.objects.create(owner=user, name="Primary FW")
+    fw2 = Framework.objects.create(owner=user, name="Secondary FW")
+    Domain.objects.create(framework=fw1, name="Primary Domain")
+    d2 = Domain.objects.create(framework=fw2, name="Secondary Domain")
+
+    # GET with ?framework=fw2.id selects fw2
+    resp = client.get(f"/decisions/create/?framework={fw2.id}")
+    assert resp.status_code == 200
+    assert "Secondary FW" in resp.content.decode()
+    assert "Secondary Domain" in resp.content.decode()
+
+    # POST with framework=fw2.id creates assessment under fw2
+    post_resp = client.post(
+        "/decisions/create/",
+        {
+            "framework": fw2.id,
+            "title": "Assessment for Secondary",
+            "proposal_description": "Testing multi-framework assessment creation",
+            "affected_domains": [d2.id],
+            "relevant_whys": [],
+            "supporting_objectives": [],
+            "conflicting_objectives": [],
+            "benefits_and_costs": "None",
+            "alternatives_considered": "None",
+            "unresolved_questions": "None",
+            "decision_outcome": "Approved",
+            "status": "DECIDED",
+        },
+    )
+    assert post_resp.status_code == 302
+    dec = DecisionRecord.objects.get(title="Assessment for Secondary")
+    assert dec.framework == fw2
+
+    # Attempting to select another user's framework returns 404
+    other = User.objects.create_user(
+        username="stranger", email="st@example.com", password="pwd"
+    )
+    fw_other = Framework.objects.create(owner=other, name="Stranger FW")
+    forbidden_resp = client.get(f"/decisions/create/?framework={fw_other.id}")
+    assert forbidden_resp.status_code == 404
+
+
+def test_admin_related_only_filter_privacy(user, other_user):
+    from django.contrib.admin.sites import AdminSite
+    from django.test import RequestFactory
+
+    from frameworks.admin import DomainAdmin
+    from frameworks.models import Domain, Framework
+
+    fw_user = Framework.objects.create(owner=user, name="User Private FW")
+    fw_other = Framework.objects.create(owner=other_user, name="Other Private FW")
+    Domain.objects.create(framework=fw_user, name="User Domain")
+    Domain.objects.create(framework=fw_other, name="Other Domain")
+
+    site = AdminSite()
+    admin_inst = DomainAdmin(Domain, site)
+    rf = RequestFactory()
+    req = rf.get("/admin/frameworks/domain/")
+    req.user = user
+
+    cl = admin_inst.get_changelist_instance(req)
+    for spec in cl.filter_specs:
+        if hasattr(spec, "lookup_choices"):
+            labels = [c[1] for c in spec.lookup_choices]
+            assert all(other_user.username not in label for label in labels)
+
+
+def test_settings_labels_and_form_action(client, user):
+    client.force_login(user)
+    resp = client.get("/accounts/settings/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert 'action="/accounts/settings/"' in content
+    assert 'for="id_profile_username"' in content
+    assert 'for="id_email"' in content
+    assert 'for="id_old_password"' in content
 
 
 def test_framework_crud_and_switcher(client, user):

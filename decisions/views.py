@@ -19,9 +19,16 @@ def decision_list_view(request):
 
 @login_required
 def decision_create_view(request):
-    framework = Framework.objects.filter(owner=request.user).first()
-    if not framework:
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
+    if not user_frameworks.exists():
         framework = Framework.objects.create(owner=request.user, name="My Priorities")
+        user_frameworks = Framework.objects.filter(owner=request.user)
+    else:
+        fw_id = request.POST.get("framework") or request.GET.get("framework")
+        if fw_id and str(fw_id).isdigit():
+            framework = get_object_or_404(Framework, id=int(fw_id), owner=request.user)
+        else:
+            framework = user_frameworks.first()
 
     if request.method == "POST":
         form = DecisionRecordForm(request.POST, framework=framework)
@@ -40,6 +47,7 @@ def decision_create_view(request):
         {
             "form": form,
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "title": "New Cross-Domain Decision Assessment",
         },
     )

@@ -57,7 +57,9 @@
                         <td class="text-end">
                             <div class="d-flex justify-content-end gap-1">
                                 <a href="{% url 'accounts:user_edit' u.id %}" class="btn btn-outline-secondary btn-sm" title="Edit User">Edit</a>
-                                <a href="{% url 'accounts:user_password_reset' u.id %}" class="btn btn-outline-secondary btn-sm" title="Reset Password">Password</a>
+                                {% if request.user.is_superuser %}
+                                    <a href="{% url 'accounts:user_password_reset' u.id %}" class="btn btn-outline-secondary btn-sm" title="Reset Password">Password</a>
+                                {% endif %}
                                 {% if u.pk != request.user.pk %}
                                     <a href="{% url 'accounts:user_delete' u.id %}" class="btn btn-outline-danger btn-sm" title="Delete User">Delete</a>
                                 {% endif %}

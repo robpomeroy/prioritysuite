@@ -84,7 +84,7 @@ class FrameworkAdmin(UserOwnedAdmin):
 @admin.register(Domain)
 class DomainAdmin(UserOwnedAdmin):
     list_display = ("name", "framework", "display_order", "is_sample")
-    list_filter = ("framework", "is_sample")
+    list_filter = (("framework", admin.RelatedOnlyFieldListFilter), "is_sample")
     search_fields = ("name",)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
@@ -96,7 +96,11 @@ class DomainAdmin(UserOwnedAdmin):
 @admin.register(Why)
 class WhyAdmin(UserOwnedAdmin):
     list_display = ("title", "domain", "is_non_negotiable", "is_sample", "last_reviewed_at")
-    list_filter = ("is_non_negotiable", "is_sample", "domain__framework")
+    list_filter = (
+        "is_non_negotiable",
+        "is_sample",
+        ("domain__framework", admin.RelatedOnlyFieldListFilter),
+    )
     search_fields = ("title", "description")
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
@@ -108,7 +112,11 @@ class WhyAdmin(UserOwnedAdmin):
 @admin.register(Objective)
 class ObjectiveAdmin(UserOwnedAdmin):
     list_display = ("title", "primary_domain", "status", "is_sample", "last_reviewed_at")
-    list_filter = ("status", "is_sample", "primary_domain__framework")
+    list_filter = (
+        "status",
+        "is_sample",
+        ("primary_domain__framework", admin.RelatedOnlyFieldListFilter),
+    )
     search_fields = ("title", "description")
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
@@ -134,7 +142,11 @@ class GoalAdmin(UserOwnedAdmin):
         "is_sample",
         "last_reviewed_at",
     )
-    list_filter = ("status", "is_sample", "primary_domain__framework")
+    list_filter = (
+        "status",
+        "is_sample",
+        ("primary_domain__framework", admin.RelatedOnlyFieldListFilter),
+    )
     search_fields = ("title", "description")
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):

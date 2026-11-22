@@ -8,7 +8,7 @@ from frameworks.models import Domain, Framework, Objective, Why
 @admin.register(DecisionRecord)
 class DecisionRecordAdmin(UserOwnedAdmin):
     list_display = ("title", "framework", "status", "created_at", "updated_at")
-    list_filter = ("status", "framework")
+    list_filter = ("status", ("framework", admin.RelatedOnlyFieldListFilter))
     search_fields = ("title", "proposal_description", "decision_outcome")
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
@@ -31,6 +31,7 @@ class DecisionRecordAdmin(UserOwnedAdmin):
 @admin.register(LLMReflectionLog)
 class LLMReflectionLogAdmin(UserOwnedAdmin):
     list_display = ("__str__", "framework", "provider_used", "created_at")
+    list_filter = (("framework", admin.RelatedOnlyFieldListFilter), "provider_used")
     readonly_fields = ("created_at",)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):

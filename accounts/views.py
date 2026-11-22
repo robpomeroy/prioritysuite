@@ -288,10 +288,9 @@ def user_edit_view(request, user_id):
 
 @login_required
 def user_password_reset_view(request, user_id):
-    _require_admin(request.user)
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only superusers have permission to reset user passwords.")
     target_user = get_object_or_404(User, pk=user_id)
-    if target_user.is_superuser and not request.user.is_superuser:
-        raise PermissionDenied("You do not have permission to reset a superuser password.")
 
     if request.method == "POST":
         form = CustomSetPasswordForm(user=target_user, data=request.POST)

@@ -15,7 +15,7 @@
                     {% csrf_token %}
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Username</label>
+                            <label class="form-label small fw-semibold" for="{{ form.username.id_for_label }}">Username</label>
                             {{ form.username }}
                             {% if form.username.errors %}
                                 <div class="text-danger small mt-1">{{ form.username.errors|striptags }}</div>
@@ -23,7 +23,7 @@
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Email Address</label>
+                            <label class="form-label small fw-semibold" for="{{ form.email.id_for_label }}">Email Address</label>
                             {{ form.email }}
                             {% if form.email.errors %}
                                 <div class="text-danger small mt-1">{{ form.email.errors|striptags }}</div>
@@ -31,7 +31,7 @@
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">First Name</label>
+                            <label class="form-label small fw-semibold" for="{{ form.first_name.id_for_label }}">First Name</label>
                             {{ form.first_name }}
                             {% if form.first_name.errors %}
                                 <div class="text-danger small mt-1">{{ form.first_name.errors|striptags }}</div>
@@ -39,7 +39,7 @@
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Last Name</label>
+                            <label class="form-label small fw-semibold" for="{{ form.last_name.id_for_label }}">Last Name</label>
                             {{ form.last_name }}
                             {% if form.last_name.errors %}
                                 <div class="text-danger small mt-1">{{ form.last_name.errors|striptags }}</div>
@@ -48,7 +48,7 @@
 
                         {% if action == 'create' %}
                             <div class="col-md-6">
-                                <label class="form-label small fw-semibold">Password</label>
+                                <label class="form-label small fw-semibold" for="{{ form.password.id_for_label }}">Password</label>
                                 {{ form.password }}
                                 {% if form.password.errors %}
                                     <div class="text-danger small mt-1">{{ form.password.errors|striptags }}</div>
@@ -59,7 +59,7 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label class="form-label small fw-semibold">Confirm Password</label>
+                                <label class="form-label small fw-semibold" for="{{ form.password_confirm.id_for_label }}">Confirm Password</label>
                                 {{ form.password_confirm }}
                                 {% if form.password_confirm.errors %}
                                     <div class="text-danger small mt-1">{{ form.password_confirm.errors|striptags }}</div>

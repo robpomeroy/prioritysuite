@@ -565,6 +565,11 @@ The application should:
     username, name, email address, active status and roles). They cannot
     view or modify other users' private frameworks, Whys, objectives,
     goals, decisions or LLM reflection logs.
+    Emergency password resets for account recovery are restricted strictly
+    to superusers; ordinary staff accounts cannot reset passwords. Until
+    cryptographic per-user encryption at rest (§11.2) is implemented,
+    superusers must only perform resets when explicitly requested by users
+    for account recovery.
 -   Allow users to export and delete their information.
 -   Clearly disclose what information is sent to an external LLM
     provider.
