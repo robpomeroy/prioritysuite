@@ -2848,6 +2848,9 @@ def test_decision_assessment_multi_framework_creation(client, user):
     # DecisionRecordForm without framework scopes relational fields to none()
     from decisions.forms import DecisionRecordForm
 
+    Why.objects.create(domain=d2, title="Secondary Why")
+    Objective.objects.create(primary_domain=d2, title="Secondary Objective")
+
     empty_form = DecisionRecordForm(framework=None)
     assert empty_form.fields["affected_domains"].queryset.count() == 0
     assert empty_form.fields["relevant_whys"].queryset.count() == 0
