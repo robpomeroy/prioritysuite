@@ -10,6 +10,14 @@ from llm.service import GUIDED_MODES, generate_reflection
 
 
 @login_required
+def chat_default_view(request):
+    from frameworks.views import _get_user_framework
+
+    framework = _get_user_framework(request.user)
+    return redirect("llm:chat", framework_id=framework.id)
+
+
+@login_required
 def chat_view(request, framework_id):
     framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
     llm_config = getattr(request.user, "llm_config", None)
@@ -94,12 +102,14 @@ def chat_view(request, framework_id):
 
     # Initial preview of full context
     preview_context_md = generate_framework_markdown(framework, include_instructions=True)
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
 
     return render(
         request,
         "llm/chat.html",
         {
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "llm_config": llm_config,
             "reflections": reflections,
             "all_domains": all_domains,

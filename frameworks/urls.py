@@ -6,7 +6,14 @@ app_name = "frameworks"
 
 urlpatterns = [
     path("", views.workspace_view, name="workspace"),
+    path("create/", views.framework_create_view, name="framework_create"),
     path("framework/<int:framework_id>/", views.workspace_view, name="workspace_detail"),
+    path("framework/<int:framework_id>/edit/", views.framework_edit_view, name="framework_edit"),
+    path(
+        "framework/<int:framework_id>/delete/",
+        views.framework_delete_view,
+        name="framework_delete",
+    ),
     path("sample/seed/", views.seed_sample_view, name="seed_sample"),
     path("sample/remove/", views.remove_sample_view, name="remove_sample"),
     path(

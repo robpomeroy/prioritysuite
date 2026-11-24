@@ -529,8 +529,8 @@ def test_crypto_legacy_sha256_backward_compatibility(settings):
         hashlib.sha256(direct_key.encode("utf-8")).digest()
     )
     legacy_direct_cipher = Fernet(legacy_direct_key)
-    legacy_direct_ciphertext = (
-        legacy_direct_cipher.encrypt(secret_text.encode("utf-8")).decode("utf-8")
+    legacy_direct_ciphertext = legacy_direct_cipher.encrypt(secret_text.encode("utf-8")).decode(
+        "utf-8"
     )
     decrypted_direct = decrypt_value(legacy_direct_ciphertext)
     assert decrypted_direct == secret_text
@@ -838,14 +838,20 @@ def test_admin_queryset_filtering(user, other_user, framework, domain, why, obje
     # Create UserLLMConfig for user
     UserLLMConfig.objects.get_or_create(user=user)
 
-    # Superuser sees all
+    # Superuser strict privacy isolation: superusers do NOT see other users' private data
     request.user.is_superuser = True
-    assert f_admin.get_queryset(request).count() >= 1
-    assert d_admin.get_queryset(request).count() >= 1
-    assert w_admin.get_queryset(request).count() >= 1
-    assert o_admin.get_queryset(request).count() >= 1
-    assert g_admin.get_queryset(request).count() >= 1
-    assert llm_admin.get_queryset(request).count() >= 1
+    assert f_admin.get_queryset(request).count() == 0
+    assert d_admin.get_queryset(request).count() == 0
+    assert w_admin.get_queryset(request).count() == 0
+    assert o_admin.get_queryset(request).count() == 0
+    assert g_admin.get_queryset(request).count() == 0
+    assert llm_admin.get_queryset(request).count() == 0
+
+    assert f_admin.has_view_permission(request, framework) is False
+    assert w_admin.has_view_permission(request, why) is False
+    assert o_admin.has_view_permission(request, objective) is False
+    assert g_admin.has_view_permission(request, goal) is False
+    assert llm_admin.has_view_permission(request, cfg) is False
 
 
 def test_decision_empty_prompt_uses_default(client, user, framework):
@@ -1710,9 +1716,9 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
             is True
         )
         assert (
-            generate_reflection(
-                "ctx", "prompt", "gemini", "gemini-1.5-flash", api_key="test-key"
-            )[0]
+            generate_reflection("ctx", "prompt", "gemini", "gemini-1.5-flash", api_key="test-key")[
+                0
+            ]
             is True
         )
         assert (
@@ -1722,10 +1728,7 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
             is True
         )
         assert (
-            generate_reflection(
-                "ctx", "prompt", "openai", "gpt-4o", api_key="test-key"
-            )[0]
-            is True
+            generate_reflection("ctx", "prompt", "openai", "gpt-4o", api_key="test-key")[0] is True
         )
 
         # Custom model containing slashes (e.g. meta-llama/Llama-3-8B-Instruct) gets openai/ prefix
@@ -1825,10 +1828,13 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
     assert dec_admin.has_change_permission(req, dec_other) is False
     assert dec_admin.has_delete_permission(req, dec_other) is False
 
-    # Superuser check
+    # Superuser check (owns dec, does NOT own dec_other)
     req.user.is_superuser = True
     assert dec_admin.has_change_permission(req, dec) is True
     assert dec_admin.has_delete_permission(req, dec) is True
+    assert dec_admin.has_change_permission(req, dec_other) is False
+    assert dec_admin.has_delete_permission(req, dec_other) is False
+    assert dec_admin.has_view_permission(req, dec_other) is False
 
     req.user.is_superuser = False
     fw_field = dec_admin.formfield_for_foreignkey(DecisionRecord._meta.get_field("framework"), req)
@@ -1861,6 +1867,9 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
     req.user.is_superuser = True
     assert ref_admin.has_change_permission(req, ref) is True
     assert ref_admin.has_delete_permission(req, ref) is True
+    assert ref_admin.has_change_permission(req, ref_other) is False
+    assert ref_admin.has_delete_permission(req, ref_other) is False
+    assert ref_admin.has_view_permission(req, ref_other) is False
 
     req.user.is_superuser = False
     ref_fw_field = ref_admin.formfield_for_foreignkey(
@@ -2321,9 +2330,7 @@ def test_dns_rebinding_ssrf_prevention():
     # IPv4-mapped loopback rebinding rejection: external host resolving to ::ffff:127.0.0.1 blocked
     with patch(
         "socket.getaddrinfo",
-        return_value=[
-            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::ffff:127.0.0.1", 11434))
-        ],
+        return_value=[(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::ffff:127.0.0.1", 11434))],
     ):
         with pytest.raises(ValueError, match="Outbound connection blocked"):
             transport.handle_request(req_v4)
@@ -2588,3 +2595,574 @@ def test_accounts_forms_endpoint_safety(settings):
 
     with patch("socket.getaddrinfo", side_effect=socket.gaierror("lookup error")):
         assert is_safe_ollama_endpoint("invalid.domain.xyz") is False
+
+
+# --- 13. MVP 0.2.0: Profile, Admin, Multi-Framework & Navigation Tests ---
+
+
+def test_user_self_service_profile_update(client, user):
+    client.force_login(user)
+    # Valid update
+    resp = client.post(
+        "/accounts/settings/profile/",
+        {"first_name": "Alice", "last_name": "Smith", "email": "alice@example.com"},
+    )
+    assert resp.status_code == 302
+    user.refresh_from_db()
+    assert user.first_name == "Alice"
+    assert user.last_name == "Smith"
+    assert user.email == "alice@example.com"
+
+    # Duplicate email validation
+    User.objects.create_user(username="dupuser", email="taken@example.com", password="pwd")
+    resp2 = client.post(
+        "/accounts/settings/profile/",
+        {"first_name": "Alice", "last_name": "Smith", "email": "taken@example.com"},
+    )
+    assert resp2.status_code == 200
+    assert "A user with that email address already exists." in resp2.content.decode()
+
+
+def test_user_self_service_password_change(client, user):
+    client.force_login(user)
+    # Successful password change
+    resp = client.post(
+        "/accounts/settings/password/",
+        {
+            "old_password": "password123",
+            "new_password1": "BrandNewSecret99!",
+            "new_password2": "BrandNewSecret99!",
+        },
+    )
+    assert resp.status_code == 302
+    user.refresh_from_db()
+    assert user.check_password("BrandNewSecret99!")
+
+    # Invalid old password
+    resp2 = client.post(
+        "/accounts/settings/password/",
+        {
+            "old_password": "wrongpassword",
+            "new_password1": "AnotherPassword123!",
+            "new_password2": "AnotherPassword123!",
+        },
+    )
+    assert resp2.status_code == 200
+    assert "Your old password was entered incorrectly." in resp2.content.decode()
+
+
+def test_user_administration_access_control(client, user):
+    # Unauthenticated redirects to login
+    resp = client.get("/accounts/users/")
+    assert resp.status_code == 302
+    assert "/accounts/login/" in resp.url
+
+    # Authenticated non-staff user gets 403 Forbidden
+    client.force_login(user)
+    resp = client.get("/accounts/users/")
+    assert resp.status_code == 403
+    resp = client.get("/accounts/users/create/")
+    assert resp.status_code == 403
+
+
+def test_user_administration_crud_and_safety(client, user, other_user):
+    # Promote user to superuser
+    user.is_staff = True
+    user.is_superuser = True
+    user.save()
+    client.force_login(user)
+
+    # 1. User list shows metadata only
+    resp = client.get("/accounts/users/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert user.username in content
+    assert other_user.username in content
+    assert "User Administration" in content
+
+    # 2. Admin creates a new user
+    create_resp = client.post(
+        "/accounts/users/create/",
+        {
+            "username": "manageduser",
+            "first_name": "Managed",
+            "last_name": "User",
+            "email": "managed@example.com",
+            "password": "ValidPassword987!",
+            "password_confirm": "ValidPassword987!",
+            "is_active": "on",
+            "is_staff": "on",
+            "is_superuser": "",
+        },
+    )
+    assert create_resp.status_code == 302
+    new_user = User.objects.get(username="manageduser")
+    assert new_user.first_name == "Managed"
+    assert new_user.is_staff is True
+    assert new_user.is_superuser is False
+    assert hasattr(new_user, "llm_config")
+
+    # 3. Admin edits the user
+    edit_resp = client.post(
+        f"/accounts/users/{new_user.id}/edit/",
+        {
+            "username": "manageduser",
+            "first_name": "UpdatedName",
+            "last_name": "User",
+            "email": "managed@example.com",
+            "is_active": "on",
+            "is_staff": "on",
+            "is_superuser": "",
+        },
+    )
+    assert edit_resp.status_code == 302
+    new_user.refresh_from_db()
+    assert new_user.first_name == "UpdatedName"
+
+    # 4. Self-action safety: admin cannot deactivate or demote self
+    self_edit_resp = client.post(
+        f"/accounts/users/{user.id}/edit/",
+        {
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+            "is_active": "",
+            "is_staff": "",
+            "is_superuser": "",
+        },
+    )
+    assert self_edit_resp.status_code == 200
+    assert "You cannot deactivate your own account." in self_edit_resp.content.decode()
+    assert "You cannot remove your own staff role." in self_edit_resp.content.decode()
+    assert "You cannot remove your own superuser role." in self_edit_resp.content.decode()
+
+    # 5. Admin resets target user password
+    reset_resp = client.post(
+        f"/accounts/users/{new_user.id}/password/",
+        {
+            "new_password1": "ResetSecret123!",
+            "new_password2": "ResetSecret123!",
+        },
+    )
+    assert reset_resp.status_code == 302
+    new_user.refresh_from_db()
+    assert new_user.check_password("ResetSecret123!")
+
+    # 6. Admin deletes target user
+    del_page = client.get(f"/accounts/users/{new_user.id}/delete/")
+    assert del_page.status_code == 200
+    del_resp = client.post(f"/accounts/users/{new_user.id}/delete/")
+    assert del_resp.status_code == 302
+    assert not User.objects.filter(username="manageduser").exists()
+
+    # 7. Self-deletion safety: admin cannot delete self
+    self_del = client.post(f"/accounts/users/{user.id}/delete/")
+    assert self_del.status_code == 302
+    assert User.objects.filter(id=user.id).exists()
+
+
+def test_staff_cannot_modify_or_delete_superusers(client, user, other_user):
+    user.is_staff = True
+    user.is_superuser = False
+    user.save()
+
+    other_user.is_superuser = True
+    other_user.save()
+
+    ordinary_user = User.objects.create_user(
+        username="ordinary", email="ord@example.com", password="password123"
+    )
+
+    client.force_login(user)
+
+    # Cannot edit superuser
+    resp = client.get(f"/accounts/users/{other_user.id}/edit/")
+    assert resp.status_code == 403
+
+    # Staff cannot reset superuser password
+    resp = client.get(f"/accounts/users/{other_user.id}/password/")
+    assert resp.status_code == 403
+
+    # Staff cannot reset ordinary user password
+    resp = client.get(f"/accounts/users/{ordinary_user.id}/password/")
+    assert resp.status_code == 403
+    post_resp = client.post(
+        f"/accounts/users/{ordinary_user.id}/password/",
+        {"new_password1": "TryHack123!", "new_password2": "TryHack123!"},
+    )
+    assert post_resp.status_code == 403
+
+    # Cannot delete superuser
+    resp = client.post(f"/accounts/users/{other_user.id}/delete/")
+    assert resp.status_code == 403
+
+
+def test_decision_assessment_multi_framework_creation(client, user):
+    client.force_login(user)
+    fw1 = Framework.objects.create(owner=user, name="Primary FW")
+    fw2 = Framework.objects.create(owner=user, name="Secondary FW")
+    Domain.objects.create(framework=fw1, name="Primary Domain")
+    d2 = Domain.objects.create(framework=fw2, name="Secondary Domain")
+
+    # GET with ?framework=fw2.id selects fw2
+    resp = client.get(f"/decisions/create/?framework={fw2.id}")
+    assert resp.status_code == 200
+    assert "Secondary FW" in resp.content.decode()
+    assert "Secondary Domain" in resp.content.decode()
+
+    # POST with framework=fw2.id creates assessment under fw2
+    post_resp = client.post(
+        "/decisions/create/",
+        {
+            "framework": fw2.id,
+            "title": "Assessment for Secondary",
+            "proposal_description": "Testing multi-framework assessment creation",
+            "affected_domains": [d2.id],
+            "relevant_whys": [],
+            "supporting_objectives": [],
+            "conflicting_objectives": [],
+            "benefits_and_costs": "None",
+            "alternatives_considered": "None",
+            "unresolved_questions": "None",
+            "decision_outcome": "Approved",
+            "status": "DECIDED",
+        },
+    )
+    assert post_resp.status_code == 302
+    dec = DecisionRecord.objects.get(title="Assessment for Secondary")
+    assert dec.framework == fw2
+
+    # Attempting to select another user's framework returns 404
+    other = User.objects.create_user(username="stranger", email="st@example.com", password="pwd")
+    fw_other = Framework.objects.create(owner=other, name="Stranger FW")
+    forbidden_resp = client.get(f"/decisions/create/?framework={fw_other.id}")
+    assert forbidden_resp.status_code == 404
+
+    # Non-integer / unicode digit conversion returns 404
+    unicode_resp = client.get("/decisions/create/?framework=%C2%B2")
+    assert unicode_resp.status_code == 404
+    alpha_resp = client.get("/decisions/create/?framework=invalid_id")
+    assert alpha_resp.status_code == 404
+
+    # DecisionRecordForm without framework scopes relational fields to none()
+    from decisions.forms import DecisionRecordForm
+
+    Why.objects.create(domain=d2, title="Secondary Why")
+    Objective.objects.create(primary_domain=d2, title="Secondary Objective")
+
+    empty_form = DecisionRecordForm(framework=None)
+    assert empty_form.fields["affected_domains"].queryset.count() == 0
+    assert empty_form.fields["relevant_whys"].queryset.count() == 0
+    assert empty_form.fields["supporting_objectives"].queryset.count() == 0
+    assert empty_form.fields["conflicting_objectives"].queryset.count() == 0
+
+
+def test_admin_related_only_filter_privacy(user, other_user):
+    from django.contrib.admin.sites import AdminSite
+    from django.test import RequestFactory
+
+    from frameworks.admin import DomainAdmin
+    from frameworks.models import Domain, Framework
+
+    fw_user = Framework.objects.create(owner=user, name="User Private FW")
+    fw_other = Framework.objects.create(owner=other_user, name="Other Private FW")
+    Domain.objects.create(framework=fw_user, name="User Domain")
+    Domain.objects.create(framework=fw_other, name="Other Domain")
+
+    site = AdminSite()
+    admin_inst = DomainAdmin(Domain, site)
+    rf = RequestFactory()
+    req = rf.get("/admin/frameworks/domain/")
+    req.user = user
+
+    cl = admin_inst.get_changelist_instance(req)
+    for spec in cl.filter_specs:
+        if hasattr(spec, "lookup_choices"):
+            labels = [c[1] for c in spec.lookup_choices]
+            assert all(other_user.username not in label for label in labels)
+
+
+def test_settings_labels_and_form_action(client, user):
+    client.force_login(user)
+    resp = client.get("/accounts/settings/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert 'action="/accounts/settings/"' in content
+    assert 'for="id_profile_username"' in content
+    assert 'for="id_email"' in content
+    assert 'for="id_old_password"' in content
+
+
+def test_framework_crud_and_switcher(client, user):
+    client.force_login(user)
+
+    # 1. Create framework
+    resp = client.post(
+        "/frameworks/create/",
+        {"name": "Secondary Framework", "description": "For side projects and crafts"},
+    )
+    assert resp.status_code == 302
+    fw = Framework.objects.get(name="Secondary Framework", owner=user)
+    assert fw.description == "For side projects and crafts"
+
+    # 2. Edit framework
+    edit_resp = client.post(
+        f"/frameworks/framework/{fw.id}/edit/",
+        {"name": "Renamed Framework", "description": "Updated description"},
+    )
+    assert edit_resp.status_code == 302
+    fw.refresh_from_db()
+    assert fw.name == "Renamed Framework"
+
+    # 3. Workspace displays switcher with both frameworks
+    ws_resp = client.get(f"/frameworks/framework/{fw.id}/")
+    assert ws_resp.status_code == 200
+    ws_content = ws_resp.content.decode()
+    assert "Renamed Framework" in ws_content
+    assert "Your Frameworks" in ws_content
+
+    # 4. Delete framework
+    del_resp = client.post(f"/frameworks/framework/{fw.id}/delete/")
+    assert del_resp.status_code == 302
+    assert not Framework.objects.filter(id=fw.id).exists()
+
+
+def test_thinking_partner_default_view_and_navigation(client, user, framework):
+    client.force_login(user)
+
+    # Redirects to user's primary framework chat
+    resp = client.get("/llm/chat/")
+    assert resp.status_code == 302
+    assert resp.url == f"/llm/framework/{framework.id}/chat/"
+
+    # Check navbar and workspace buttons
+    ws_resp = client.get(f"/frameworks/framework/{framework.id}/")
+    assert ws_resp.status_code == 200
+    content = ws_resp.content.decode()
+    assert "Thinking Partner" in content
+    assert f"/llm/framework/{framework.id}/chat/" in content
+
+
+def test_version_display(client, user):
+    client.force_login(user)
+    resp = client.get("/accounts/settings/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "PrioritySuite v0.2.0" in content
+
+
+def test_registration_form_case_insensitive_duplicate_email(db):
+    from accounts.forms import UserRegistrationForm
+
+    User.objects.create_user(
+        username="existing", email="TestUser@example.com", password="password"
+    )
+
+    # Lowercase duplicate email
+    form = UserRegistrationForm(
+        data={
+            "username": "newuser",
+            "email": "testuser@example.com",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+        }
+    )
+    assert not form.is_valid()
+    assert "A user with that email address already exists." in form.errors["email"]
+
+    # Different casing duplicate email
+    form2 = UserRegistrationForm(
+        data={
+            "username": "newuser2",
+            "email": "TESTUSER@EXAMPLE.COM",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+        }
+    )
+    assert not form2.is_valid()
+    assert "A user with that email address already exists." in form2.errors["email"]
+
+
+def test_staff_cannot_escalate_privileges(client, db):
+    staff_user = User.objects.create_user(
+        username="staff1", email="staff1@example.com", password="password", is_staff=True
+    )
+    peer_staff = User.objects.create_user(
+        username="staff2", email="staff2@example.com", password="password", is_staff=True
+    )
+    superuser = User.objects.create_superuser(
+        username="admin", email="admin@example.com", password="password"
+    )
+
+    client.force_login(staff_user)
+
+    # 1. Staff user cannot promote new user to staff or superuser via user_create
+    resp = client.post(
+        "/accounts/users/create/",
+        {
+            "username": "escalated",
+            "email": "escalated@example.com",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+            "is_staff": "on",
+            "is_superuser": "on",
+        },
+    )
+    assert resp.status_code == 302
+    created = User.objects.get(username="escalated")
+    assert not created.is_staff
+    assert not created.is_superuser
+
+    # 2. Staff user cannot edit peer staff user or superuser
+    resp_peer = client.get(f"/accounts/users/{peer_staff.id}/edit/")
+    assert resp_peer.status_code == 403
+    resp_super = client.get(f"/accounts/users/{superuser.id}/edit/")
+    assert resp_super.status_code == 403
+
+    # 3. Staff user cannot delete peer staff user or superuser
+    del_peer = client.post(f"/accounts/users/{peer_staff.id}/delete/")
+    assert del_peer.status_code == 403
+    assert User.objects.filter(id=peer_staff.id).exists()
+
+    del_super = client.post(f"/accounts/users/{superuser.id}/delete/")
+    assert del_super.status_code == 403
+    assert User.objects.filter(id=superuser.id).exists()
+
+    # 4. Superuser can edit and delete staff users
+    client.force_login(superuser)
+    resp_edit = client.get(f"/accounts/users/{peer_staff.id}/edit/")
+    assert resp_edit.status_code == 200
+
+
+def test_privacy_isolated_user_admin_password_and_deletion(client, db):
+    staff_user = User.objects.create_user(
+        username="staff_admin", email="staff_admin@example.com", password="password", is_staff=True
+    )
+    target_user = User.objects.create_user(
+        username="target_user", email="target@example.com", password="password"
+    )
+    superuser = User.objects.create_superuser(
+        username="superadmin", email="superadmin@example.com", password="password"
+    )
+
+    # Staff user attempting to access password change page in admin
+    client.force_login(staff_user)
+    resp = client.get(f"/admin/auth/user/{target_user.id}/password/")
+    assert resp.status_code == 403
+
+    # Superuser can access password change page in admin
+    client.force_login(superuser)
+    resp_super = client.get(f"/admin/auth/user/{target_user.id}/password/")
+    assert resp_super.status_code == 200
+
+    # Ensure Framework, Domain, LLMConfig cascade deletion works
+    # when superuser deletes user in Admin
+    fw = Framework.objects.create(owner=target_user, name="Target Framework")
+    Domain.objects.create(framework=fw, name="Target Domain")
+    from accounts.models import UserLLMConfig
+
+    UserLLMConfig.objects.create(user=target_user, provider="openai")
+
+    # Confirmation page GET does not leak private framework/domain names
+    get_del = client.get(f"/admin/auth/user/{target_user.id}/delete/")
+    assert get_del.status_code == 200
+    del_content = get_del.content.decode()
+    assert "Target Framework" not in del_content
+    assert "Target Domain" not in del_content
+    assert f"User: {target_user.username}" in del_content
+
+    # Non-superuser staff cannot escalate privileges via admin user change form
+    from django.contrib.auth.models import Permission
+
+    change_perm = Permission.objects.get(codename="change_user")
+    staff_user.user_permissions.add(change_perm)
+
+    client.force_login(staff_user)
+    staff_edit_resp = client.get(f"/admin/auth/user/{staff_user.id}/change/")
+    assert staff_edit_resp.status_code == 200
+    # is_superuser and is_staff are readonly for non-superusers
+    assert "is_superuser" in staff_edit_resp.context["adminform"].readonly_fields
+    assert "is_staff" in staff_edit_resp.context["adminform"].readonly_fields
+
+    # Attempting to post is_superuser=on does not escalate
+    client.post(
+        f"/admin/auth/user/{staff_user.id}/change/",
+        {"username": "staff_admin", "email": "staff_admin@example.com", "is_superuser": "on"},
+    )
+    staff_user.refresh_from_db()
+    assert not staff_user.is_superuser
+
+    client.force_login(superuser)
+    del_resp = client.post(f"/admin/auth/user/{target_user.id}/delete/", {"post": "yes"})
+    assert del_resp.status_code == 302
+    assert not User.objects.filter(id=target_user.id).exists()
+    assert not Framework.objects.filter(id=fw.id).exists()
+    assert not UserLLMConfig.objects.filter(user_id=target_user.id).exists()
+
+
+def test_user_list_view_pagination(client, db):
+    superuser = User.objects.create_superuser(
+        username="admin_page", email="admin_page@example.com", password="password"
+    )
+    # Create 30 users to test pagination (25 per page)
+    for i in range(30):
+        User.objects.create_user(username=f"page_user_{i}", email=f"page_{i}@example.com")
+
+    client.force_login(superuser)
+    resp = client.get("/accounts/users/")
+    assert resp.status_code == 200
+    assert "users_list" in resp.context
+    assert "page_obj" in resp.context
+    assert len(resp.context["users_list"]) == 25
+    assert resp.context["page_obj"].paginator.num_pages == 2
+
+    resp_p2 = client.get("/accounts/users/?page=2")
+    assert resp_p2.status_code == 200
+    assert len(resp_p2.context["users_list"]) > 0
+
+
+def test_multi_framework_switchers_in_review_compare_chat(client, user):
+    client.force_login(user)
+    fw1 = Framework.objects.create(owner=user, name="Primary FW")
+    fw2 = Framework.objects.create(owner=user, name="Secondary FW")
+
+    # 1. Review view displays switcher dropdown
+    resp_rev = client.get(f"/frameworks/review/{fw1.id}/")
+    assert resp_rev.status_code == 200
+    rev_content = resp_rev.content.decode()
+    assert "Switch Framework" in rev_content
+    assert f"/frameworks/review/{fw2.id}/" in rev_content
+
+    # 2. Compare view displays switcher dropdown and accepts ?framework=<id>
+    resp_comp = client.get(f"/decisions/compare/?framework={fw2.id}")
+    assert resp_comp.status_code == 200
+    comp_content = resp_comp.content.decode()
+    assert "Switch Framework" in comp_content
+    assert f"/decisions/compare/{fw1.id}/" in comp_content
+    assert resp_comp.context["framework"].id == fw2.id
+
+    # Verify dedicated path compare_detail keeps framework in buttons and forms
+    resp_comp_detail = client.get(f"/decisions/compare/{fw2.id}/")
+    assert resp_comp_detail.status_code == 200
+    detail_content = resp_comp_detail.content.decode()
+    assert f"/decisions/compare/{fw2.id}/?type=objectives" in detail_content
+    assert f"/decisions/compare/{fw2.id}/?type=goals" in detail_content
+    assert f'action="/decisions/compare/{fw2.id}/"' in detail_content
+
+    # 3. Chat view displays switcher dropdown
+    resp_chat = client.get(f"/llm/framework/{fw1.id}/chat/")
+    assert resp_chat.status_code == 200
+    chat_content = resp_chat.content.decode()
+    assert "Switch Framework" in chat_content
+    assert f"/llm/framework/{fw2.id}/chat/" in chat_content
+
+
+def test_decision_form_validation_error_rendering(client, user, framework):
+    client.force_login(user)
+    # Submit invalid decision form (missing required title)
+    resp = client.post("/decisions/create/", {"framework": framework.id, "title": ""})
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "This field is required." in content
+    assert "text-danger small mt-1" in content

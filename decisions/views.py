@@ -1,6 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from decisions.forms import DecisionRecordForm
 from decisions.models import DecisionRecord, LLMReflectionLog
@@ -19,9 +21,19 @@ def decision_list_view(request):
 
 @login_required
 def decision_create_view(request):
-    framework = Framework.objects.filter(owner=request.user).first()
-    if not framework:
-        framework = Framework.objects.create(owner=request.user, name="My Priorities")
+    fw_param = request.POST.get("framework") or request.GET.get("framework")
+    if fw_param is not None and str(fw_param).strip() != "":
+        try:
+            fw_pk = int(fw_param)
+        except (ValueError, TypeError):
+            raise Http404("Invalid framework identifier.") from None
+        framework = get_object_or_404(Framework, id=fw_pk, owner=request.user)
+    else:
+        framework = Framework.objects.filter(owner=request.user).order_by("name").first()
+        if not framework:
+            framework = Framework.objects.create(owner=request.user, name="My Priorities")
+
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
 
     if request.method == "POST":
         form = DecisionRecordForm(request.POST, framework=framework)
@@ -40,6 +52,7 @@ def decision_create_view(request):
         {
             "form": form,
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "title": "New Cross-Domain Decision Assessment",
         },
     )
@@ -159,12 +172,19 @@ def decision_reflect_view(request, decision_id):
 
 @login_required
 def decision_compare_view(request, framework_id=None):
-    if framework_id:
-        framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
+    fw_param = request.POST.get("framework") or request.GET.get("framework") or framework_id
+    if fw_param:
+        try:
+            fw_id = int(fw_param)
+        except (ValueError, TypeError):
+            raise Http404("Invalid framework identifier.") from None
+        framework = get_object_or_404(Framework, id=fw_id, owner=request.user)
     else:
-        framework = Framework.objects.filter(owner=request.user).first()
+        framework = Framework.objects.filter(owner=request.user).order_by("name").first()
         if not framework:
             framework = Framework.objects.create(owner=request.user, name="My Priorities")
+
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
 
     all_objectives = (
         Objective.objects.filter(primary_domain__framework=framework)
@@ -227,7 +247,8 @@ def decision_compare_view(request, framework_id=None):
                 request,
                 "Please select at least one valid priority item from your framework to compare.",
             )
-            return redirect(f"{request.path}?type={compare_type}")
+            base_url = reverse("decisions:compare_detail", kwargs={"framework_id": framework.id})
+            return redirect(f"{base_url}?type={compare_type}")
 
         if action == "convert_to_decision":
             title = f"Priority Comparison: {' vs '.join([item.title for item in items][:2])}"
@@ -334,7 +355,10 @@ def decision_compare_view(request, framework_id=None):
                 request.session.modified = True
                 messages.success(request, "Thinking partner reflection generated.")
                 query_parts = [f"type={compare_type}"] + [f"selected={x}" for x in selected_ids]
-                return redirect(f"{request.path}?{'&'.join(query_parts)}")
+                base_url = reverse(
+                    "decisions:compare_detail", kwargs={"framework_id": framework.id}
+                )
+                return redirect(f"{base_url}?{'&'.join(query_parts)}")
             else:
                 messages.error(request, response_text)
 
@@ -344,6 +368,7 @@ def decision_compare_view(request, framework_id=None):
         "decisions/compare.html",
         {
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "compare_type": compare_type,
             "all_objectives": all_objectives,
             "all_goals": all_goals,

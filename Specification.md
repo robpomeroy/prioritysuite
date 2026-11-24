@@ -561,6 +561,15 @@ The application should:
 -   Store provider API keys securely, encrypted at rest.
 -   Avoid advertising and unnecessary tracking.
 -   Minimise the information accessible to application administrators.
+    Administrators may view and manage only user account metadata (such as
+    username, name, email address, active status and roles). They cannot
+    view or modify other users' private frameworks, Whys, objectives,
+    goals, decisions or LLM reflection logs.
+    Emergency password resets for account recovery are restricted strictly
+    to superusers; ordinary staff accounts cannot reset passwords. Until
+    cryptographic per-user encryption at rest (§11.2) is implemented,
+    superusers must only perform resets when explicitly requested by users
+    for account recovery.
 -   Allow users to export and delete their information.
 -   Clearly disclose what information is sent to an external LLM
     provider.
@@ -615,7 +624,12 @@ that it is useful in everyday decision-making.
 
 ### 11.2 Defer until later
 
--   Automated public demo system with periodic reset timers (specified in §8.3; implementation deferred to a post-MVP phase).
+-   Automated public demo system with periodic reset timers (specified in
+    §8.3; implementation deferred to a post-MVP phase).
+-   Full encryption at rest for all user framework and decision data using
+    per-user keys derived from the user's password via a key derivation
+    function (such as PBKDF2 or Argon2id), providing cryptographic
+    zero-knowledge privacy at the storage layer.
 -   Complex visualisations and relationship diagrams.
 -   Numerical scoring and weighted-priority calculations.
 -   Advanced analytics and reporting.

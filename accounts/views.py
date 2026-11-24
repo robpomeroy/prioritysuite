@@ -1,14 +1,31 @@
 import logging
 
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
-from accounts.forms import UserLLMConfigForm, UserRegistrationForm
+from accounts.forms import (
+    AdminUserCreateForm,
+    AdminUserEditForm,
+    CustomPasswordChangeForm,
+    CustomSetPasswordForm,
+    UserLLMConfigForm,
+    UserProfileForm,
+    UserRegistrationForm,
+)
 from accounts.models import UserLLMConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _require_admin(user):
+    if not (user.is_authenticated and (user.is_staff or user.is_superuser)):
+        raise PermissionDenied("You do not have permission to access user administration.")
 
 
 def register_view(request):
@@ -42,14 +59,74 @@ def settings_view(request):
             if new_key:
                 cfg.api_key = new_key
             elif cfg.provider != old_provider or (cfg.api_base or "").strip() != old_api_base:
-                # Do not retain previous key when provider or api_base changes without a new key
                 cfg.api_key = ""
             cfg.save()
-            messages.success(request, "Settings updated successfully.")
+            messages.success(request, "LLM settings updated successfully.")
             return redirect("accounts:settings")
     else:
         form = UserLLMConfigForm(instance=config)
-    return render(request, "accounts/settings.html", {"form": form, "config": config})
+
+    profile_form = UserProfileForm(instance=request.user)
+    password_form = CustomPasswordChangeForm(user=request.user)
+    return render(
+        request,
+        "accounts/settings.html",
+        {
+            "form": form,
+            "config": config,
+            "profile_form": profile_form,
+            "password_form": password_form,
+        },
+    )
+
+
+@login_required
+@require_POST
+def profile_update_view(request):
+    config, _ = UserLLMConfig.objects.get_or_create(user=request.user)
+    profile_form = UserProfileForm(request.POST, instance=request.user)
+    if profile_form.is_valid():
+        profile_form.save()
+        messages.success(request, "Account profile updated successfully.")
+        return redirect("accounts:settings")
+
+    form = UserLLMConfigForm(instance=config)
+    password_form = CustomPasswordChangeForm(user=request.user)
+    return render(
+        request,
+        "accounts/settings.html",
+        {
+            "form": form,
+            "config": config,
+            "profile_form": profile_form,
+            "password_form": password_form,
+        },
+    )
+
+
+@login_required
+@require_POST
+def password_change_view(request):
+    config, _ = UserLLMConfig.objects.get_or_create(user=request.user)
+    password_form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+    if password_form.is_valid():
+        user = password_form.save()
+        update_session_auth_hash(request, user)
+        messages.success(request, "Your password has been changed successfully.")
+        return redirect("accounts:settings")
+
+    form = UserLLMConfigForm(instance=config)
+    profile_form = UserProfileForm(instance=request.user)
+    return render(
+        request,
+        "accounts/settings.html",
+        {
+            "form": form,
+            "config": config,
+            "profile_form": profile_form,
+            "password_form": password_form,
+        },
+    )
 
 
 @login_required
@@ -73,7 +150,6 @@ def test_llm_connection_view(request):
         return redirect("accounts:settings")
     config = getattr(request.user, "llm_config", None)
 
-    # Allow testing unsaved form values if submitted directly from settings form
     if "provider" in request.POST:
         provider = request.POST.get("provider", "none")
         model_name = request.POST.get("model_name", "").strip()
@@ -83,7 +159,6 @@ def test_llm_connection_view(request):
             or request.POST.get("consent_given") is True
         )
         raw_key = (request.POST.get("raw_api_key") or request.POST.get("api_key") or "").strip()
-        # Only reuse saved key if both submitted provider and api_base match saved configuration
         api_base_matches = (api_base == (config.api_base or "").strip()) if config else False
         api_key = raw_key or (
             config.api_key if (config and config.provider == provider and api_base_matches) else ""
@@ -137,3 +212,130 @@ def test_llm_connection_view(request):
         )
         messages.error(request, f"Connection failed: {response_text}")
     return redirect("accounts:settings")
+
+
+# -------------------------------------------------------------------------
+# User Administration Views (Staff / Superuser Only)
+# -------------------------------------------------------------------------
+
+
+@login_required
+def user_list_view(request):
+    _require_admin(request.user)
+    users = User.objects.all().order_by("username")
+    paginator = Paginator(users, 25)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    return render(
+        request,
+        "accounts/user_list.html",
+        {"users_list": page_obj, "page_obj": page_obj},
+    )
+
+
+@login_required
+def user_create_view(request):
+    _require_admin(request.user)
+    if request.method == "POST":
+        form = AdminUserCreateForm(request.POST, current_user=request.user)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.set_password(form.cleaned_data["password"])
+            if not request.user.is_superuser:
+                user.is_staff = False
+                user.is_superuser = False
+            user.save()
+            UserLLMConfig.objects.get_or_create(user=user)
+            messages.success(request, f"User '{user.username}' created successfully.")
+            return redirect("accounts:user_list")
+    else:
+        form = AdminUserCreateForm(current_user=request.user)
+    return render(request, "accounts/user_form.html", {"form": form, "action": "create"})
+
+
+@login_required
+def user_edit_view(request, user_id):
+    _require_admin(request.user)
+    target_user = get_object_or_404(User, pk=user_id)
+    is_restricted_target = target_user.is_superuser or (
+        target_user.is_staff and target_user.pk != request.user.pk
+    )
+    if is_restricted_target and not request.user.is_superuser:
+        raise PermissionDenied("You do not have permission to edit staff or superuser accounts.")
+
+    if request.method == "POST":
+        form = AdminUserEditForm(request.POST, instance=target_user, current_user=request.user)
+        if form.is_valid():
+            new_active = form.cleaned_data.get("is_active")
+            new_staff = form.cleaned_data.get("is_staff")
+            new_superuser = form.cleaned_data.get("is_superuser")
+            if target_user.pk == request.user.pk:
+                if not new_active:
+                    form.add_error("is_active", "You cannot deactivate your own account.")
+                if not new_staff and request.user.is_staff:
+                    form.add_error("is_staff", "You cannot remove your own staff role.")
+                if not new_superuser and request.user.is_superuser:
+                    form.add_error("is_superuser", "You cannot remove your own superuser role.")
+                if form.errors:
+                    return render(
+                        request,
+                        "accounts/user_form.html",
+                        {"form": form, "action": "edit", "target_user": target_user},
+                    )
+
+            saved_user = form.save(commit=False)
+            if not request.user.is_superuser:
+                saved_user.is_staff = target_user.is_staff
+                saved_user.is_superuser = target_user.is_superuser
+            saved_user.save()
+            messages.success(request, f"User '{saved_user.username}' updated successfully.")
+            return redirect("accounts:user_list")
+    else:
+        form = AdminUserEditForm(instance=target_user, current_user=request.user)
+    return render(
+        request,
+        "accounts/user_form.html",
+        {"form": form, "action": "edit", "target_user": target_user},
+    )
+
+
+@login_required
+def user_password_reset_view(request, user_id):
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only superusers have permission to reset user passwords.")
+    target_user = get_object_or_404(User, pk=user_id)
+
+    if request.method == "POST":
+        form = CustomSetPasswordForm(user=target_user, data=request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Password for '{target_user.username}' has been reset.")
+            return redirect("accounts:user_list")
+    else:
+        form = CustomSetPasswordForm(user=target_user)
+    return render(
+        request,
+        "accounts/user_password.html",
+        {"form": form, "target_user": target_user},
+    )
+
+
+@login_required
+def user_delete_view(request, user_id):
+    _require_admin(request.user)
+    target_user = get_object_or_404(User, pk=user_id)
+    if target_user.pk == request.user.pk:
+        messages.error(request, "You cannot delete your own account via user administration.")
+        return redirect("accounts:user_list")
+    is_restricted_target = target_user.is_superuser or (
+        target_user.is_staff and target_user.pk != request.user.pk
+    )
+    if is_restricted_target and not request.user.is_superuser:
+        raise PermissionDenied("You do not have permission to delete staff or superuser accounts.")
+
+    if request.method == "POST":
+        username = target_user.username
+        target_user.delete()
+        messages.success(request, f"User '{username}' has been deleted.")
+        return redirect("accounts:user_list")
+    return render(request, "accounts/user_confirm_delete.html", {"target_user": target_user})

@@ -4,22 +4,41 @@
 {% block content %}
 <div class="row mb-4 align-items-center">
     <div class="col-md-7">
-        <h2 class="text-terracotta mb-1">Cross-Domain Priority Comparison</h2>
+        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+            <h2 class="text-terracotta mb-0">Cross-Domain Priority Comparison</h2>
+            {% if user_frameworks and user_frameworks|length > 1 %}
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle text-terracotta fw-bold small px-2 py-1" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span>{{ framework.name }}</span>
+                    </button>
+                    <ul class="dropdown-menu shadow-sm">
+                        <li><h6 class="dropdown-header small text-uppercase">Switch Framework</h6></li>
+                        {% for uf in user_frameworks %}
+                            <li>
+                                <a class="dropdown-item {% if uf.id == framework.id %}active fw-semibold{% endif %}" href="{% url 'decisions:compare_detail' uf.id %}?type={{ compare_type }}">
+                                    {{ uf.name }}{% if uf.is_sample %} <span class="badge bg-amber text-white ms-1">Sample</span>{% endif %}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
         <p class="text-muted small mb-0">
             Compare competing commitments across domains to examine qualitative tensions and trade-offs when time, attention, or energy are limited.
         </p>
     </div>
     <div class="col-md-5 text-md-end mt-3 mt-md-0">
         <div class="btn-group btn-group-sm">
-            <a href="?type=objectives" class="btn {% if compare_type == 'objectives' %}btn-primary bg-terracotta{% else %}btn-outline-secondary{% endif %}">Compare Objectives</a>
-            <a href="?type=goals" class="btn {% if compare_type == 'goals' %}btn-primary bg-terracotta{% else %}btn-outline-secondary{% endif %}">Compare Goals</a>
+            <a href="{% url 'decisions:compare_detail' framework.id %}?type=objectives" class="btn {% if compare_type == 'objectives' %}btn-primary bg-terracotta{% else %}btn-outline-secondary{% endif %}">Compare Objectives</a>
+            <a href="{% url 'decisions:compare_detail' framework.id %}?type=goals" class="btn {% if compare_type == 'goals' %}btn-primary bg-terracotta{% else %}btn-outline-secondary{% endif %}">Compare Goals</a>
         </div>
     </div>
 </div>
 
 <!-- Selector Form -->
 <div class="card shadow-sm border mb-4 p-3 bg-light">
-    <form method="get" class="row g-3 align-items-center">
+    <form method="get" action="{% url 'decisions:compare_detail' framework.id %}" class="row g-3 align-items-center">
         <input type="hidden" name="type" value="{{ compare_type }}">
         <div class="col-md-8">
             <label class="form-label small fw-bold text-muted mb-1">Select items to place in comparison:</label>
@@ -127,7 +146,7 @@
 
     <div class="d-flex flex-wrap gap-2 align-items-center">
         <!-- Convert to Decision Record -->
-        <form method="post" class="d-inline">
+        <form method="post" action="{% url 'decisions:compare_detail' framework.id %}" class="d-inline">
             {% csrf_token %}
             <input type="hidden" name="action" value="convert_to_decision">
             <input type="hidden" name="type" value="{{ compare_type }}">
@@ -148,7 +167,7 @@
     {% if llm_config and llm_config.consent_given and llm_config.provider != 'none' %}
         <div class="collapse mt-3" id="llm-compare-collapse">
             <div class="card card-body bg-light border p-3">
-                <form method="post">
+                <form method="post" action="{% url 'decisions:compare_detail' framework.id %}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="reflect">
                     <input type="hidden" name="type" value="{{ compare_type }}">

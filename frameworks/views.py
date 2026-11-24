@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from frameworks.forms import DomainForm, GoalForm, ObjectiveForm, WhyForm
+from frameworks.forms import DomainForm, FrameworkForm, GoalForm, ObjectiveForm, WhyForm
 from frameworks.models import Domain, Framework, Goal, Objective, StatusChoices, Why
 from frameworks.services import remove_sample_frameworks, seed_sample_framework
 
@@ -16,7 +16,7 @@ from frameworks.services import remove_sample_frameworks, seed_sample_framework
 def _get_user_framework(user, framework_id=None):
     if framework_id:
         return get_object_or_404(Framework, id=framework_id, owner=user)
-    fw = Framework.objects.filter(owner=user).first()
+    fw = Framework.objects.filter(owner=user).order_by("name").first()
     if not fw:
         fw = Framework.objects.create(owner=user, name="My Personal Priorities")
     return fw
@@ -25,7 +25,7 @@ def _get_user_framework(user, framework_id=None):
 @login_required
 def workspace_view(request, framework_id=None):
     framework = _get_user_framework(request.user, framework_id)
-    user_frameworks = Framework.objects.filter(owner=request.user)
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
     domains = framework.domains.prefetch_related(
         "whys",
         "primary_objectives__whys",
@@ -63,6 +63,58 @@ def remove_sample_view(request):
         messages.info(request, f"Removed {count} sample framework(s).")
         return redirect("frameworks:workspace")
     return redirect("frameworks:workspace")
+
+
+@login_required
+def framework_create_view(request):
+    if request.method == "POST":
+        form = FrameworkForm(request.POST)
+        if form.is_valid():
+            framework = form.save(commit=False)
+            framework.owner = request.user
+            framework.save()
+            messages.success(request, f"Framework '{framework.name}' created.")
+            return redirect("frameworks:workspace_detail", framework_id=framework.id)
+    else:
+        form = FrameworkForm()
+    return render(
+        request,
+        "frameworks/form_modal.html",
+        {"form": form, "title": "Create New Framework"},
+    )
+
+
+@login_required
+def framework_edit_view(request, framework_id):
+    framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
+    if request.method == "POST":
+        form = FrameworkForm(request.POST, instance=framework)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Framework '{framework.name}' updated.")
+            return redirect("frameworks:workspace_detail", framework_id=framework.id)
+    else:
+        form = FrameworkForm(instance=framework)
+    return render(
+        request,
+        "frameworks/form_modal.html",
+        {"form": form, "title": f"Edit Framework: {framework.name}"},
+    )
+
+
+@login_required
+def framework_delete_view(request, framework_id):
+    framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
+    if request.method == "POST":
+        name = framework.name
+        framework.delete()
+        messages.info(request, f"Framework '{name}' was deleted.")
+        return redirect("frameworks:workspace")
+    return render(
+        request,
+        "frameworks/confirm_delete.html",
+        {"item_type": "Framework", "item_name": framework.name},
+    )
 
 
 @login_required
@@ -382,11 +434,14 @@ def review_view(request, framework_id=None):
         objectives = objectives.filter(last_reviewed_at__isnull=False, last_reviewed_at__lt=cutoff)
         goals = goals.filter(last_reviewed_at__isnull=False, last_reviewed_at__lt=cutoff)
 
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
+
     return render(
         request,
         "frameworks/review.html",
         {
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "whys": whys,
             "objectives": objectives,
             "goals": goals,

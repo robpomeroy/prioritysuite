@@ -5,6 +5,7 @@ from llm import views
 app_name = "llm"
 
 urlpatterns = [
+    path("chat/", views.chat_default_view, name="chat_default"),
     path("framework/<int:framework_id>/chat/", views.chat_view, name="chat"),
     path(
         "reflection/<int:reflection_id>/delete/",

@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}{% if action == 'create' %}Create User{% else %}Edit User: {{ target_user.username }}{% endif %} — PrioritySuite{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border mb-4">
+            <div class="card-header bg-transparent py-3">
+                <h5 class="mb-0 text-terracotta">
+                    {% if action == 'create' %}Create New User{% else %}Edit User: {{ target_user.username }}{% endif %}
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold" for="{{ form.username.id_for_label }}">Username</label>
+                            {{ form.username }}
+                            {% if form.username.errors %}
+                                <div class="text-danger small mt-1">{{ form.username.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold" for="{{ form.email.id_for_label }}">Email Address</label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="text-danger small mt-1">{{ form.email.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold" for="{{ form.first_name.id_for_label }}">First Name</label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.first_name.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold" for="{{ form.last_name.id_for_label }}">Last Name</label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.last_name.errors|striptags }}</div>
+                            {% endif %}
+                        </div>
+
+                        {% if action == 'create' %}
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold" for="{{ form.password.id_for_label }}">Password</label>
+                                {{ form.password }}
+                                {% if form.password.errors %}
+                                    <div class="text-danger small mt-1">{{ form.password.errors|striptags }}</div>
+                                {% endif %}
+                                {% if form.password.help_text %}
+                                    <div class="form-text small">{{ form.password.help_text }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold" for="{{ form.password_confirm.id_for_label }}">Confirm Password</label>
+                                {{ form.password_confirm }}
+                                {% if form.password_confirm.errors %}
+                                    <div class="text-danger small mt-1">{{ form.password_confirm.errors|striptags }}</div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
+                        <div class="col-12 mt-4">
+                            <h6 class="text-secondary small fw-bold text-uppercase border-bottom pb-2">Roles & Permissions</h6>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check mb-2">
+                                {{ form.is_active }}
+                                <label class="form-check-label small" for="{{ form.is_active.id_for_label }}">
+                                    <strong>Active:</strong> Designates whether this user should be treated as active. Unselect this instead of deleting accounts.
+                                </label>
+                                {% if form.is_active.errors %}
+                                    <div class="text-danger small mt-1">{{ form.is_active.errors|striptags }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-check mb-2">
+                                {{ form.is_staff }}
+                                <label class="form-check-label small" for="{{ form.is_staff.id_for_label }}">
+                                    <strong>Staff status:</strong> Designates whether the user can log into this administration site.
+                                </label>
+                                {% if form.is_staff.errors %}
+                                    <div class="text-danger small mt-1">{{ form.is_staff.errors|striptags }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-check mb-2">
+                                {{ form.is_superuser }}
+                                <label class="form-check-label small" for="{{ form.is_superuser.id_for_label }}">
+                                    <strong>Superuser status:</strong> Designates that this user has all permissions without explicitly assigning them.
+                                </label>
+                                {% if form.is_superuser.help_text %}
+                                    <div class="form-text small">{{ form.is_superuser.help_text }}</div>
+                                {% endif %}
+                                {% if form.is_superuser.errors %}
+                                    <div class="text-danger small mt-1">{{ form.is_superuser.errors|striptags }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex justify-content-between align-items-center">
+                        <button type="submit" class="btn btn-primary bg-terracotta">
+                            {% if action == 'create' %}Create User{% else %}Save Changes{% endif %}
+                        </button>
+                        <a href="{% url 'accounts:user_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
