@@ -15,8 +15,10 @@
     function setStoredTheme(theme) {
         try {
             localStorage.setItem('prioritysuite-theme', theme);
+            return true;
         } catch (e) {
             // Storage quota exceeded or disabled
+            return false;
         }
     }
 
@@ -36,8 +38,9 @@
             if (server !== lastServer) {
                 // Server profile preference changed or newly loaded: update LocalStorage
                 try {
-                    localStorage.setItem('prioritysuite-server-theme', server);
-                    setStoredTheme(server);
+                    if (setStoredTheme(server)) {
+                        localStorage.setItem('prioritysuite-server-theme', server);
+                    }
                 } catch (e) {
                     // Storage write rejected: apply server preference for current load
                 }
