@@ -28,6 +28,17 @@
                     </div>
                     <button type="submit" class="btn btn-primary bg-terracotta w-100">Sign In</button>
                 </form>
+                {% if demo_mode %}
+                <div class="mt-3 pt-3 border-top text-center">
+                    <form method="post" action="{% url 'accounts:demo_login' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center">
+                            <span class="me-2">🍂</span> Explore Live Demo
+                        </button>
+                    </form>
+                    <div class="form-text small mt-1">No registration or API key required.</div>
+                </div>
+                {% endif %}
                 <div class="mt-4 text-center small text-muted">
                     Don't have an account? <a href="{% url 'accounts:register' %}" class="text-terracotta">Create one</a>
                 </div>

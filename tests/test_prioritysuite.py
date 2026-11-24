@@ -2955,7 +2955,7 @@ def test_version_display(client, user):
     resp = client.get("/accounts/settings/")
     assert resp.status_code == 200
     content = resp.content.decode()
-    assert "PrioritySuite v0.3.0" in content
+    assert "PrioritySuite v0.4.0" in content
 
 
 def test_registration_form_case_insensitive_duplicate_email(db):
@@ -3272,3 +3272,102 @@ def test_export_markdown_framework_switcher_and_links(client, user):
     assert "Switch Framework" in content
     assert f"/exports/framework/{fw2.id}/" in content
     assert f"/frameworks/framework/{fw1.id}/" in content  # Return link
+
+
+def test_demo_mode_management_command_and_login(db, client, settings):
+    settings.DEMO_MODE = True
+    settings.DEMO_USERNAME = "demo_test"
+
+    from django.core.management import call_command
+
+    call_command("reset_demo", username="demo_test")
+
+    demo_user = User.objects.get(username="demo_test")
+    assert demo_user.frameworks.count() == 3
+    assert demo_user.frameworks.filter(name="Career & Vocation Transition").exists()
+    assert demo_user.frameworks.filter(name="Independent Creator & Sustainable Pace").exists()
+
+    # Login screen shows demo button
+    resp_login = client.get("/accounts/login/")
+    assert resp_login.status_code == 200
+    assert "Explore Live Demo" in resp_login.content.decode()
+
+    # Single-click demo login
+    resp_demo_auth = client.post("/accounts/demo-login/")
+    assert resp_demo_auth.status_code == 302
+    assert resp_demo_auth.url == "/frameworks/"
+
+    # Demo mode banner is visible in base.html
+    client.force_login(demo_user)
+    resp_ws = client.get("/frameworks/")
+    assert "Demo Mode Active:" in resp_ws.content.decode()
+
+    # Security boundaries on demo user
+    resp_profile = client.post("/accounts/settings/profile/", {"first_name": "Hacked"})
+    assert resp_profile.status_code == 302
+    demo_user.refresh_from_db()
+    assert demo_user.first_name == "Demo"
+
+    resp_pwd = client.post(
+        "/accounts/settings/password/",
+        {"old_password": "pwd", "new_password1": "New", "new_password2": "New"},
+    )
+    assert resp_pwd.status_code == 302
+
+    resp_del = client.post("/accounts/delete-account/")
+    assert resp_del.status_code == 302
+    assert User.objects.filter(username="demo_test").exists()
+
+
+def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
+    client.force_login(user)
+    from frameworks.services import seed_sample_framework
+
+    seed_sample_framework(user)
+
+    # 1. Export encrypted vault with invalid password
+    resp_bad = client.post("/accounts/settings/vault/export/", {"password": "wrong"})
+    assert resp_bad.status_code == 302
+    assert "messages" in resp_bad.cookies or resp_bad.url == "/accounts/settings/"
+
+    # 2. Export encrypted vault with correct password
+    resp_export = client.post("/accounts/settings/vault/export/", {"password": "password123"})
+    assert resp_export.status_code == 200
+    assert resp_export["Content-Type"] == "application/json"
+    assert "attachment; filename=" in resp_export["Content-Disposition"]
+
+    import json
+    from io import BytesIO
+
+    envelope = json.loads(resp_export.content.decode("utf-8"))
+    assert envelope["format"] == "prioritysuite-encrypted-vault-v1"
+    assert "ciphertext" in envelope
+
+    # 3. Simulate new user restoring from this vault
+    new_user = User.objects.create_user(username="restored_user", password="my_vault_password")
+    client.force_login(new_user)
+    assert Framework.objects.filter(owner=new_user).count() == 0
+
+    # Wrong password on restore fails
+    vault_bytes = BytesIO(resp_export.content)
+    vault_bytes.name = "vault.json"
+    resp_fail = client.post(
+        "/accounts/settings/vault/restore/",
+        {"vault_file": vault_bytes, "password": "wrong_vault_password"},
+    )
+    assert resp_fail.status_code == 302
+    assert Framework.objects.filter(owner=new_user).count() == 0
+
+    # Correct password restores user frameworks and items
+    vault_bytes.seek(0)
+    resp_ok = client.post(
+        "/accounts/settings/vault/restore/",
+        {"vault_file": vault_bytes, "password": "password123"},
+    )
+    assert resp_ok.status_code == 302
+    assert Framework.objects.filter(owner=new_user).count() == 1
+    fw = Framework.objects.get(owner=new_user)
+    assert fw.domains.count() == 3
+    assert fw.decisions.count() == 1
+    assert fw.reflections.count() == 1
+

@@ -12,6 +12,11 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    {% if is_demo_user %}
+    <div class="alert alert-info text-center py-1 mb-0 small rounded-0 border-bottom border-info">
+        <strong>Demo Mode Active:</strong> You are exploring a public evaluation instance. Changes are periodically reset to sample frameworks.
+    </div>
+    {% endif %}
     <nav class="navbar navbar-expand-lg border-bottom shadow-sm mb-4" style="background-color: var(--bs-card-bg);">
         <div class="container-fluid px-4">
             <a class="navbar-brand text-terracotta d-flex align-items-center" href="{% url 'frameworks:workspace' %}">
