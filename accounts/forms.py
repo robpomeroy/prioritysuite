@@ -5,7 +5,11 @@ from urllib.parse import urlparse
 
 from django import forms
 from django.conf import settings
-from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
+from django.contrib.auth.forms import (
+    PasswordChangeForm,
+    PasswordResetForm,
+    SetPasswordForm,
+)
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -292,13 +296,12 @@ class UserLLMConfigForm(forms.ModelForm):
 
     class Meta:
         model = UserLLMConfig
-        fields = ("provider", "model_name", "api_base", "consent_given", "theme_preference")
+        fields = ("provider", "model_name", "api_base", "consent_given")
         widgets = {
             "provider": forms.Select(attrs={"class": "form-select"}),
             "model_name": forms.TextInput(attrs={"class": "form-control"}),
             "api_base": forms.TextInput(attrs={"class": "form-control"}),
             "consent_given": forms.CheckboxInput(attrs={"class": "form-check-input"}),
-            "theme_preference": forms.Select(attrs={"class": "form-select"}),
         }
 
     def clean(self):
@@ -327,6 +330,13 @@ class UserLLMConfigForm(forms.ModelForm):
 
 
 class UserProfileForm(UniqueEmailMixin, forms.ModelForm):
+    theme_preference = forms.ChoiceField(
+        choices=UserLLMConfig.THEME_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+        required=False,
+        label="Theme Mode",
+    )
+
     class Meta:
         model = User
         fields = ("first_name", "last_name", "email")
@@ -335,6 +345,22 @@ class UserProfileForm(UniqueEmailMixin, forms.ModelForm):
             "last_name": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            llm_config = getattr(self.instance, "llm_config", None)
+            if llm_config:
+                self.fields["theme_preference"].initial = llm_config.theme_preference
+
+    def save(self, commit=True):
+        user = super().save(commit=commit)
+        theme_preference = self.cleaned_data.get("theme_preference")
+        if theme_preference and hasattr(user, "llm_config"):
+            user.llm_config.theme_preference = theme_preference
+            if commit:
+                user.llm_config.save()
+        return user
 
 
 class BaseAdminUserForm(UniqueEmailMixin, forms.ModelForm):
@@ -417,6 +443,15 @@ class CustomPasswordChangeForm(PasswordChangeForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.update({"class": "form-control"})
+
+
+class CustomPasswordResetForm(PasswordResetForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update(
+                {"class": "form-control", "placeholder": "Enter your email address"}
+            )
 
 
 class CustomSetPasswordForm(SetPasswordForm):

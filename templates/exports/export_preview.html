@@ -5,10 +5,29 @@
 <div class="row justify-content-center py-4">
     <div class="col-lg-10">
         <div class="card shadow-sm border mb-4">
-            <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
-                <h4 class="mb-0 text-terracotta">{{ title }}</h4>
+            <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h4 class="mb-0 text-terracotta">{{ title }}</h4>
+                    {% if user_frameworks and user_frameworks|length > 1 and framework %}
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary dropdown-toggle text-terracotta fw-bold small px-2 py-1" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span>{{ framework.name }}</span>
+                            </button>
+                            <ul class="dropdown-menu shadow-sm">
+                                <li><h6 class="dropdown-header small text-uppercase">Switch Framework</h6></li>
+                                {% for uf in user_frameworks %}
+                                    <li>
+                                        <a class="dropdown-item {% if uf.id == framework.id %}active fw-semibold{% endif %}" href="{% url 'exports:export_framework' uf.id %}">
+                                            {{ uf.name }}{% if uf.is_sample %} <span class="badge bg-amber text-white ms-1">Sample</span>{% endif %}
+                                        </a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
                 <div>
-                    <button class="btn btn-sm btn-outline-secondary me-2" onclick="navigator.clipboard.writeText(document.getElementById('md-content').value); alert('Copied to clipboard!')">Copy Markdown</button>
+                    <button id="copy-btn" class="btn btn-sm btn-outline-secondary me-2" onclick="navigator.clipboard.writeText(document.getElementById('md-content').value); const b = document.getElementById('copy-btn'); b.textContent = '✓ Copied!'; setTimeout(() => b.textContent = 'Copy Markdown', 2000);">Copy Markdown</button>
                     <a href="{{ download_url|default:'?download=1' }}" class="btn btn-sm btn-primary bg-terracotta">Download .md File</a>
                 </div>
             </div>
@@ -73,7 +92,11 @@
                     <textarea id="md-content" class="form-control font-monospace small" rows="20" readonly>{{ markdown_content }}</textarea>
                 </div>
                 <div class="text-end">
-                    <button type="button" class="btn btn-outline-secondary" onclick="history.back()">Back</button>
+                    {% if framework %}
+                        <a href="{% url 'frameworks:workspace_detail' framework.id %}" class="btn btn-outline-secondary">Return to Workspace</a>
+                    {% else %}
+                        <a href="{% url 'decisions:decision_list' %}" class="btn btn-outline-secondary">Return to Assessments</a>
+                    {% endif %}
                 </div>
             </div>
         </div>

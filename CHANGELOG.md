@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-24
+
+### Added
+- Self-service token-based password reset flow via email with Autumn-themed
+  templates.
+- Ability for staff and superusers to trigger password reset emails from
+  User Administration.
+- Autumn styling for Django Admin with Terracotta and Sage accents in light
+  and dark modes.
+- Superuser navigation shortcuts to the Django Admin portal from the navbar
+  and User Administration view.
+- Active navigation tab highlighting in the top-level navbar.
+- Multi-framework switcher dropdown and clipboard copy status feedback in
+  Markdown Export Preview.
+
+### Changed
+- Removed direct password setting by superusers and administrators to guarantee
+  user privacy and prevent administrator account takeover.
+- Theme button now displays initial theme name and icon on page load without
+  flicker.
+- Moved Theme Mode setting from LLM Thinking Partner to User Profile section.
+- Separated Account Deletion into a dedicated danger section in settings.
+- Form modal, delete confirmation, and export views use safe return links
+  instead of `history.back()`.
+- Periodic review status updates preserve active filter context and return to
+  the review view.
+- Overhauled dark mode contrast across all hardcoded light background utility
+  classes.
+- Bumped version to 0.3.0 across project metadata and configuration.
+
 ## [0.2.0] - 2026-11-20
 
 ### Added

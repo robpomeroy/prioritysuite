@@ -129,3 +129,41 @@ main {
     font-weight: 700;
     letter-spacing: -0.5px;
 }
+
+/* Dark mode overrides for hardcoded bootstrap utilities */
+[data-bs-theme="dark"] .bg-light {
+    background-color: var(--ap-card-bg) !important;
+    color: var(--ap-text) !important;
+}
+
+[data-bs-theme="dark"] .bg-white {
+    background-color: var(--ap-surface) !important;
+    color: var(--ap-text) !important;
+}
+
+[data-bs-theme="dark"] .text-dark {
+    color: var(--ap-text) !important;
+}
+
+[data-bs-theme="dark"] .table-light {
+    --bs-table-bg: var(--ap-card-bg);
+    --bs-table-color: var(--ap-text);
+    border-color: var(--ap-card-border);
+}
+
+[data-bs-theme="dark"] .table-light th {
+    background-color: var(--ap-card-bg) !important;
+    color: var(--ap-text) !important;
+    border-color: var(--ap-card-border) !important;
+}
+
+[data-bs-theme="dark"] .form-control:disabled,
+[data-bs-theme="dark"] .form-control[readonly] {
+    background-color: var(--ap-card-bg);
+    color: var(--ap-text-muted);
+}
+
+[data-bs-theme="dark"] .card {
+    background-color: var(--ap-surface);
+    border-color: var(--ap-card-border);
+}

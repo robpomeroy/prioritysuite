@@ -25,19 +25,19 @@
                 {% if user.is_authenticated %}
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'frameworks:workspace' %}">Workspace</a>
+                        <a class="nav-link {% if request.resolver_match.app_name == 'frameworks' and request.resolver_match.url_name in 'workspace,workspace_detail,domain_create,domain_edit,why_create,why_edit,objective_create,objective_edit,goal_create,goal_edit,framework_create,framework_edit' %}active fw-semibold text-terracotta{% endif %}" href="{% url 'frameworks:workspace' %}">Workspace</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'decisions:decision_list' %}">Decision Assessments</a>
+                        <a class="nav-link {% if request.resolver_match.app_name == 'decisions' and request.resolver_match.url_name in 'decision_list,decision_detail,decision_create,decision_edit' %}active fw-semibold text-terracotta{% endif %}" href="{% url 'decisions:decision_list' %}">Decision Assessments</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'decisions:compare' %}">Compare Priorities</a>
+                        <a class="nav-link {% if request.resolver_match.app_name == 'decisions' and request.resolver_match.url_name in 'compare,compare_detail' %}active fw-semibold text-terracotta{% endif %}" href="{% url 'decisions:compare' %}">Compare Priorities</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'frameworks:review' %}">Periodic Review</a>
+                        <a class="nav-link {% if request.resolver_match.app_name == 'frameworks' and request.resolver_match.url_name in 'review,review_detail' %}active fw-semibold text-terracotta{% endif %}" href="{% url 'frameworks:review' %}">Periodic Review</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'llm:chat_default' %}">Thinking Partner</a>
+                        <a class="nav-link {% if request.resolver_match.app_name == 'llm' %}active fw-semibold text-terracotta{% endif %}" href="{% url 'llm:chat_default' %}">Thinking Partner</a>
                     </li>
                 </ul>
                 {% endif %}
@@ -56,6 +56,9 @@
                             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                                 {% if user.is_staff or user.is_superuser %}
                                     <li><a class="dropdown-item" href="{% url 'accounts:user_list' %}">User Administration</a></li>
+                                {% endif %}
+                                {% if user.is_superuser %}
+                                    <li><a class="dropdown-item" href="{% url 'admin:index' %}">Django Admin Portal</a></li>
                                 {% endif %}
                                 <li><a class="dropdown-item" href="{% url 'accounts:settings' %}">Settings & LLM BYOK</a></li>
                                 <li><hr class="dropdown-divider"></li>

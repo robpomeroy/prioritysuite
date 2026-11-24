@@ -13,7 +13,7 @@ from accounts.forms import (
     AdminUserCreateForm,
     AdminUserEditForm,
     CustomPasswordChangeForm,
-    CustomSetPasswordForm,
+    CustomPasswordResetForm,
     UserLLMConfigForm,
     UserProfileForm,
     UserRegistrationForm,
@@ -300,24 +300,42 @@ def user_edit_view(request, user_id):
 
 
 @login_required
-def user_password_reset_view(request, user_id):
-    if not request.user.is_superuser:
-        raise PermissionDenied("Only superusers have permission to reset user passwords.")
+@require_POST
+def user_send_password_reset_view(request, user_id):
+    _require_admin(request.user)
     target_user = get_object_or_404(User, pk=user_id)
-
-    if request.method == "POST":
-        form = CustomSetPasswordForm(user=target_user, data=request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"Password for '{target_user.username}' has been reset.")
-            return redirect("accounts:user_list")
-    else:
-        form = CustomSetPasswordForm(user=target_user)
-    return render(
-        request,
-        "accounts/user_password.html",
-        {"form": form, "target_user": target_user},
+    is_restricted_target = target_user.is_superuser or (
+        target_user.is_staff and target_user.pk != request.user.pk
     )
+    if is_restricted_target and not request.user.is_superuser:
+        raise PermissionDenied(
+            "You do not have permission to trigger password reset for staff or superuser accounts."
+        )
+
+    if not target_user.email:
+        messages.error(
+            request,
+            f"User '{target_user.username}' does not have an email address configured. "
+            "Cannot send password reset email.",
+        )
+        return redirect("accounts:user_list")
+
+    reset_form = CustomPasswordResetForm(data={"email": target_user.email})
+    if reset_form.is_valid():
+        reset_form.save(
+            request=request,
+            use_https=request.is_secure(),
+            email_template_name="accounts/password_reset_email.html",
+            subject_template_name="accounts/password_reset_subject.txt",
+        )
+        messages.success(
+            request,
+            f"Password reset instructions have been emailed to '{target_user.email}' "
+            f"for user '{target_user.username}'.",
+        )
+    else:
+        messages.error(request, "Failed to send password reset email.")
+    return redirect("accounts:user_list")
 
 
 @login_required

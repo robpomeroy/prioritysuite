@@ -6,14 +6,18 @@ from django.core.exceptions import PermissionDenied
 from accounts.models import UserLLMConfig
 
 admin.site.unregister(User)
+admin.site.site_header = "🍂 PrioritySuite Administration"
+admin.site.site_title = "PrioritySuite Admin"
+admin.site.index_title = "System & User Account Administration"
 
 
 @admin.register(User)
 class PrivacyIsolatedUserAdmin(BaseUserAdmin):
     def user_change_password(self, request, id, form_url=""):
-        if not request.user.is_superuser:
-            raise PermissionDenied("Only superusers have permission to reset user passwords.")
-        return super().user_change_password(request, id, form_url=form_url)
+        raise PermissionDenied(
+            "Direct password resets by administrators are disabled to protect user privacy. "
+            "Users must reset passwords via the self-service email flow."
+        )
 
     def has_change_permission(self, request, obj=None):
         if obj is not None and not request.user.is_superuser:
