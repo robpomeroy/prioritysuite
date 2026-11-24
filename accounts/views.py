@@ -5,6 +5,7 @@ from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -222,7 +223,14 @@ def test_llm_connection_view(request):
 def user_list_view(request):
     _require_admin(request.user)
     users = User.objects.all().order_by("username")
-    return render(request, "accounts/user_list.html", {"users_list": users})
+    paginator = Paginator(users, 25)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    return render(
+        request,
+        "accounts/user_list.html",
+        {"users_list": page_obj, "page_obj": page_obj},
+    )
 
 
 @login_required
@@ -234,6 +242,7 @@ def user_create_view(request):
             user = form.save(commit=False)
             user.set_password(form.cleaned_data["password"])
             if not request.user.is_superuser:
+                user.is_staff = False
                 user.is_superuser = False
             user.save()
             UserLLMConfig.objects.get_or_create(user=user)
@@ -248,8 +257,11 @@ def user_create_view(request):
 def user_edit_view(request, user_id):
     _require_admin(request.user)
     target_user = get_object_or_404(User, pk=user_id)
-    if target_user.is_superuser and not request.user.is_superuser:
-        raise PermissionDenied("You do not have permission to edit a superuser account.")
+    is_restricted_target = target_user.is_superuser or (
+        target_user.is_staff and target_user.pk != request.user.pk
+    )
+    if is_restricted_target and not request.user.is_superuser:
+        raise PermissionDenied("You do not have permission to edit staff or superuser accounts.")
 
     if request.method == "POST":
         form = AdminUserEditForm(request.POST, instance=target_user, current_user=request.user)
@@ -273,6 +285,7 @@ def user_edit_view(request, user_id):
 
             saved_user = form.save(commit=False)
             if not request.user.is_superuser:
+                saved_user.is_staff = target_user.is_staff
                 saved_user.is_superuser = target_user.is_superuser
             saved_user.save()
             messages.success(request, f"User '{saved_user.username}' updated successfully.")
@@ -314,8 +327,11 @@ def user_delete_view(request, user_id):
     if target_user.pk == request.user.pk:
         messages.error(request, "You cannot delete your own account via user administration.")
         return redirect("accounts:user_list")
-    if target_user.is_superuser and not request.user.is_superuser:
-        raise PermissionDenied("You do not have permission to delete a superuser account.")
+    is_restricted_target = target_user.is_superuser or (
+        target_user.is_staff and target_user.pk != request.user.pk
+    )
+    if is_restricted_target and not request.user.is_superuser:
+        raise PermissionDenied("You do not have permission to delete staff or superuser accounts.")
 
     if request.method == "POST":
         username = target_user.username

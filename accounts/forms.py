@@ -1,5 +1,6 @@
 import ipaddress
 import socket
+from typing import Any
 from urllib.parse import urlparse
 
 from django import forms
@@ -205,7 +206,42 @@ def validate_llm_api_base(provider: str, api_base: str, api_key: str | None = No
     return api_base
 
 
-class UserRegistrationForm(forms.ModelForm):
+class UniqueEmailMixin:
+    cleaned_data: dict[str, Any]
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if not email:
+            return ""
+        qs = User.objects.filter(email__iexact=email)
+        instance = getattr(self, "instance", None)
+        if instance and instance.pk:
+            qs = qs.exclude(pk=instance.pk)
+        if qs.exists():
+            raise ValidationError("A user with that email address already exists.")
+        return email
+
+
+def validate_password_confirmation(
+    form, password_field_name: str = "password", confirm_field_name: str = "password_confirm"  # nosec B107
+):
+    p1 = form.cleaned_data.get(password_field_name)
+    p2 = form.cleaned_data.get(confirm_field_name)
+    if p1 and p2:
+        if p1 != p2:
+            form.add_error(confirm_field_name, "Passwords do not match.")
+        else:
+            temp_user = User(
+                username=form.cleaned_data.get("username", ""),
+                email=form.cleaned_data.get("email", ""),
+            )
+            try:
+                validate_password(p1, user=temp_user)
+            except ValidationError as error:
+                form.add_error(password_field_name, error)
+
+
+class UserRegistrationForm(UniqueEmailMixin, forms.ModelForm):
     password = forms.CharField(
         widget=forms.PasswordInput(
             attrs={"class": "form-control", "placeholder": "Create a password"}
@@ -229,22 +265,15 @@ class UserRegistrationForm(forms.ModelForm):
             ),
         }
 
+    def clean_email(self):
+        email = super().clean_email()
+        if not email:
+            raise ValidationError("An email address is required.")
+        return email
+
     def clean(self):
         cleaned_data = super().clean()
-        p1 = cleaned_data.get("password")
-        p2 = cleaned_data.get("password_confirm")
-        if p1 and p2:
-            if p1 != p2:
-                self.add_error("password_confirm", "Passwords do not match.")
-            else:
-                temp_user = User(
-                    username=cleaned_data.get("username", ""),
-                    email=cleaned_data.get("email", ""),
-                )
-                try:
-                    validate_password(p1, user=temp_user)
-                except ValidationError as error:
-                    self.add_error("password", error)
+        validate_password_confirmation(self)
         return cleaned_data
 
 
@@ -297,7 +326,7 @@ class UserLLMConfigForm(forms.ModelForm):
         return cleaned_data
 
 
-class UserProfileForm(forms.ModelForm):
+class UserProfileForm(UniqueEmailMixin, forms.ModelForm):
     class Meta:
         model = User
         fields = ("first_name", "last_name", "email")
@@ -307,18 +336,25 @@ class UserProfileForm(forms.ModelForm):
             "email": forms.EmailInput(attrs={"class": "form-control"}),
         }
 
-    def clean_email(self):
-        email = (self.cleaned_data.get("email") or "").strip()
-        if email:
-            qs = User.objects.filter(email__iexact=email)
-            if self.instance and self.instance.pk:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise ValidationError("A user with that email address already exists.")
-        return email
+
+class BaseAdminUserForm(UniqueEmailMixin, forms.ModelForm):
+    def __init__(self, *args, current_user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_user = current_user
+        if current_user and not current_user.is_superuser:
+            if "is_staff" in self.fields:
+                self.fields["is_staff"].disabled = True
+                self.fields["is_staff"].help_text = (
+                    "Only superusers can grant staff permissions."
+                )
+            if "is_superuser" in self.fields:
+                self.fields["is_superuser"].disabled = True
+                self.fields["is_superuser"].help_text = (
+                    "Only superusers can grant superuser permissions."
+                )
 
 
-class AdminUserCreateForm(forms.ModelForm):
+class AdminUserCreateForm(BaseAdminUserForm):
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={"class": "form-control"}),
         help_text="Password must satisfy security requirements.",
@@ -349,42 +385,13 @@ class AdminUserCreateForm(forms.ModelForm):
             "is_superuser": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
-    def __init__(self, *args, current_user=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.current_user = current_user
-        if current_user and not current_user.is_superuser:
-            if "is_superuser" in self.fields:
-                self.fields["is_superuser"].disabled = True
-                self.fields["is_superuser"].help_text = (
-                    "Only superusers can grant superuser permissions."
-                )
-
-    def clean_email(self):
-        email = (self.cleaned_data.get("email") or "").strip()
-        if email and User.objects.filter(email__iexact=email).exists():
-            raise ValidationError("A user with that email address already exists.")
-        return email
-
     def clean(self):
         cleaned_data = super().clean()
-        p1 = cleaned_data.get("password")
-        p2 = cleaned_data.get("password_confirm")
-        if p1 and p2:
-            if p1 != p2:
-                self.add_error("password_confirm", "Passwords do not match.")
-            else:
-                temp_user = User(
-                    username=cleaned_data.get("username", ""),
-                    email=cleaned_data.get("email", ""),
-                )
-                try:
-                    validate_password(p1, user=temp_user)
-                except ValidationError as error:
-                    self.add_error("password", error)
+        validate_password_confirmation(self)
         return cleaned_data
 
 
-class AdminUserEditForm(forms.ModelForm):
+class AdminUserEditForm(BaseAdminUserForm):
     class Meta:
         model = User
         fields = (
@@ -405,26 +412,6 @@ class AdminUserEditForm(forms.ModelForm):
             "is_staff": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "is_superuser": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
-
-    def __init__(self, *args, current_user=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.current_user = current_user
-        if current_user and not current_user.is_superuser:
-            if "is_superuser" in self.fields:
-                self.fields["is_superuser"].disabled = True
-                self.fields["is_superuser"].help_text = (
-                    "Only superusers can grant superuser permissions."
-                )
-
-    def clean_email(self):
-        email = (self.cleaned_data.get("email") or "").strip()
-        if email:
-            qs = User.objects.filter(email__iexact=email)
-            if self.instance and self.instance.pk:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise ValidationError("A user with that email address already exists.")
-        return email
 
 
 class CustomPasswordChangeForm(PasswordChangeForm):

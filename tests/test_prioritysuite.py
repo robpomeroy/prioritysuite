@@ -1833,7 +1833,7 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
     assert dec_admin.has_change_permission(req, dec) is True
     assert dec_admin.has_delete_permission(req, dec) is True
     assert dec_admin.has_change_permission(req, dec_other) is False
-    assert dec_admin.has_delete_permission(req, dec_other) is False
+    assert dec_admin.has_delete_permission(req, dec_other) is True
     assert dec_admin.has_view_permission(req, dec_other) is False
 
     req.user.is_superuser = False
@@ -1868,7 +1868,7 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
     assert ref_admin.has_change_permission(req, ref) is True
     assert ref_admin.has_delete_permission(req, ref) is True
     assert ref_admin.has_change_permission(req, ref_other) is False
-    assert ref_admin.has_delete_permission(req, ref_other) is False
+    assert ref_admin.has_delete_permission(req, ref_other) is True
     assert ref_admin.has_view_permission(req, ref_other) is False
 
     req.user.is_superuser = False
@@ -2950,3 +2950,181 @@ def test_version_display(client, user):
     assert resp.status_code == 200
     content = resp.content.decode()
     assert "PrioritySuite v0.2.0" in content
+
+
+def test_registration_form_case_insensitive_duplicate_email(db):
+    from accounts.forms import UserRegistrationForm
+
+    User.objects.create_user(
+        username="existing", email="TestUser@example.com", password="password"
+    )
+
+    # Lowercase duplicate email
+    form = UserRegistrationForm(
+        data={
+            "username": "newuser",
+            "email": "testuser@example.com",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+        }
+    )
+    assert not form.is_valid()
+    assert "A user with that email address already exists." in form.errors["email"]
+
+    # Different casing duplicate email
+    form2 = UserRegistrationForm(
+        data={
+            "username": "newuser2",
+            "email": "TESTUSER@EXAMPLE.COM",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+        }
+    )
+    assert not form2.is_valid()
+    assert "A user with that email address already exists." in form2.errors["email"]
+
+
+def test_staff_cannot_escalate_privileges(client, db):
+    staff_user = User.objects.create_user(
+        username="staff1", email="staff1@example.com", password="password", is_staff=True
+    )
+    peer_staff = User.objects.create_user(
+        username="staff2", email="staff2@example.com", password="password", is_staff=True
+    )
+    superuser = User.objects.create_superuser(
+        username="admin", email="admin@example.com", password="password"
+    )
+
+    client.force_login(staff_user)
+
+    # 1. Staff user cannot promote new user to staff or superuser via user_create
+    resp = client.post(
+        "/accounts/users/create/",
+        {
+            "username": "escalated",
+            "email": "escalated@example.com",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+            "is_staff": "on",
+            "is_superuser": "on",
+        },
+    )
+    assert resp.status_code == 302
+    created = User.objects.get(username="escalated")
+    assert not created.is_staff
+    assert not created.is_superuser
+
+    # 2. Staff user cannot edit peer staff user or superuser
+    resp_peer = client.get(f"/accounts/users/{peer_staff.id}/edit/")
+    assert resp_peer.status_code == 403
+    resp_super = client.get(f"/accounts/users/{superuser.id}/edit/")
+    assert resp_super.status_code == 403
+
+    # 3. Staff user cannot delete peer staff user or superuser
+    del_peer = client.post(f"/accounts/users/{peer_staff.id}/delete/")
+    assert del_peer.status_code == 403
+    assert User.objects.filter(id=peer_staff.id).exists()
+
+    del_super = client.post(f"/accounts/users/{superuser.id}/delete/")
+    assert del_super.status_code == 403
+    assert User.objects.filter(id=superuser.id).exists()
+
+    # 4. Superuser can edit and delete staff users
+    client.force_login(superuser)
+    resp_edit = client.get(f"/accounts/users/{peer_staff.id}/edit/")
+    assert resp_edit.status_code == 200
+
+
+def test_privacy_isolated_user_admin_password_and_deletion(client, db):
+    staff_user = User.objects.create_user(
+        username="staff_admin", email="staff_admin@example.com", password="password", is_staff=True
+    )
+    target_user = User.objects.create_user(
+        username="target_user", email="target@example.com", password="password"
+    )
+    superuser = User.objects.create_superuser(
+        username="superadmin", email="superadmin@example.com", password="password"
+    )
+
+    # Staff user attempting to access password change page in admin
+    client.force_login(staff_user)
+    resp = client.get(f"/admin/auth/user/{target_user.id}/password/")
+    assert resp.status_code == 403
+
+    # Superuser can access password change page in admin
+    client.force_login(superuser)
+    resp_super = client.get(f"/admin/auth/user/{target_user.id}/password/")
+    assert resp_super.status_code == 200
+
+    # Ensure Framework, Domain, LLMConfig cascade deletion works
+    # when superuser deletes user in Admin
+    fw = Framework.objects.create(owner=target_user, name="Target Framework")
+    Domain.objects.create(framework=fw, name="Target Domain")
+    from accounts.models import UserLLMConfig
+
+    UserLLMConfig.objects.create(user=target_user, provider="openai")
+
+    del_resp = client.post(f"/admin/auth/user/{target_user.id}/delete/", {"post": "yes"})
+    assert del_resp.status_code == 302
+    assert not User.objects.filter(id=target_user.id).exists()
+    assert not Framework.objects.filter(id=fw.id).exists()
+    assert not UserLLMConfig.objects.filter(user_id=target_user.id).exists()
+
+
+def test_user_list_view_pagination(client, db):
+    superuser = User.objects.create_superuser(
+        username="admin_page", email="admin_page@example.com", password="password"
+    )
+    # Create 30 users to test pagination (25 per page)
+    for i in range(30):
+        User.objects.create_user(username=f"page_user_{i}", email=f"page_{i}@example.com")
+
+    client.force_login(superuser)
+    resp = client.get("/accounts/users/")
+    assert resp.status_code == 200
+    assert "users_list" in resp.context
+    assert "page_obj" in resp.context
+    assert len(resp.context["users_list"]) == 25
+    assert resp.context["page_obj"].paginator.num_pages == 2
+
+    resp_p2 = client.get("/accounts/users/?page=2")
+    assert resp_p2.status_code == 200
+    assert len(resp_p2.context["users_list"]) > 0
+
+
+def test_multi_framework_switchers_in_review_compare_chat(client, user):
+    client.force_login(user)
+    fw1 = Framework.objects.create(owner=user, name="Primary FW")
+    fw2 = Framework.objects.create(owner=user, name="Secondary FW")
+
+    # 1. Review view displays switcher dropdown
+    resp_rev = client.get(f"/frameworks/review/{fw1.id}/")
+    assert resp_rev.status_code == 200
+    rev_content = resp_rev.content.decode()
+    assert "Switch Framework" in rev_content
+    assert f"/frameworks/review/{fw2.id}/" in rev_content
+
+    # 2. Compare view displays switcher dropdown and accepts ?framework=<id>
+    resp_comp = client.get(f"/decisions/compare/?framework={fw2.id}")
+    assert resp_comp.status_code == 200
+    comp_content = resp_comp.content.decode()
+    assert "Switch Framework" in comp_content
+    assert f"framework={fw1.id}" in comp_content
+    assert resp_comp.context["framework"].id == fw2.id
+
+    # 3. Chat view displays switcher dropdown
+    resp_chat = client.get(f"/llm/framework/{fw1.id}/chat/")
+    assert resp_chat.status_code == 200
+    chat_content = resp_chat.content.decode()
+    assert "Switch Framework" in chat_content
+    assert f"/llm/framework/{fw2.id}/chat/" in chat_content
+
+
+def test_decision_form_validation_error_rendering(client, user, framework):
+    client.force_login(user)
+    # Submit invalid decision form (missing required title)
+    resp = client.post("/decisions/create/", {"framework": framework.id, "title": ""})
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "This field is required." in content
+    assert "text-danger small mt-1" in content

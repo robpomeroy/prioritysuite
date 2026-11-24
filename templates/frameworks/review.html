@@ -4,8 +4,27 @@
 {% block content %}
 <div class="row mb-4 align-items-center">
     <div class="col-md-7">
-        <h2 class="text-terracotta mb-1">Periodic Review</h2>
-        <p class="text-muted small mb-0">Examine enduring Whys, update status of Objectives, and review practical Goals.</p>
+        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+            <h2 class="text-terracotta mb-0">Periodic Review</h2>
+            {% if user_frameworks and user_frameworks|length > 1 %}
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle text-terracotta fw-bold small px-2 py-1" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span>{{ framework.name }}</span>
+                    </button>
+                    <ul class="dropdown-menu shadow-sm">
+                        <li><h6 class="dropdown-header small text-uppercase">Switch Framework</h6></li>
+                        {% for uf in user_frameworks %}
+                            <li>
+                                <a class="dropdown-item {% if uf.id == framework.id %}active fw-semibold{% endif %}" href="{% url 'frameworks:review_detail' uf.id %}">
+                                    {{ uf.name }}{% if uf.is_sample %} <span class="badge bg-amber text-white ms-1">Sample</span>{% endif %}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+        <p class="text-muted small mb-0">Examine enduring Whys, update status of Objectives, and review practical Goals for <strong>{{ framework.name }}</strong>.</p>
     </div>
     <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex flex-wrap justify-content-md-end gap-2 align-items-center">
         <form method="post" action="{% url 'frameworks:mark_all_reviewed' framework.id %}" class="d-inline" onsubmit="return confirm('Mark all items in this framework as reviewed today?');">

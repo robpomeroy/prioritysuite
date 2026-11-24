@@ -102,12 +102,14 @@ def chat_view(request, framework_id):
 
     # Initial preview of full context
     preview_context_md = generate_framework_markdown(framework, include_instructions=True)
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
 
     return render(
         request,
         "llm/chat.html",
         {
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "llm_config": llm_config,
             "reflections": reflections,
             "all_domains": all_domains,

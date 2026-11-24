@@ -49,6 +49,8 @@ class UserOwnedAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         if obj is not None:
+            if request.user.is_superuser:
+                return True
             owner = getattr(obj, "owner", None)
             if owner is None and hasattr(obj, "framework"):
                 owner = obj.framework.owner

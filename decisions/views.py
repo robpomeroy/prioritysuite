@@ -32,10 +32,6 @@ def decision_create_view(request):
         if not framework:
             framework = Framework.objects.create(owner=request.user, name="My Priorities")
 
-    if not framework:
-        messages.error(request, "No framework available. Please create a framework first.")
-        return redirect("frameworks:framework_create")
-
     user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
 
     if request.method == "POST":
@@ -175,12 +171,19 @@ def decision_reflect_view(request, decision_id):
 
 @login_required
 def decision_compare_view(request, framework_id=None):
-    if framework_id:
-        framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
+    fw_param = request.GET.get("framework") or framework_id
+    if fw_param:
+        try:
+            fw_id = int(fw_param)
+        except (ValueError, TypeError):
+            raise Http404("Invalid framework identifier.") from None
+        framework = get_object_or_404(Framework, id=fw_id, owner=request.user)
     else:
-        framework = Framework.objects.filter(owner=request.user).first()
+        framework = Framework.objects.filter(owner=request.user).order_by("name").first()
         if not framework:
             framework = Framework.objects.create(owner=request.user, name="My Priorities")
+
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
 
     all_objectives = (
         Objective.objects.filter(primary_domain__framework=framework)
@@ -360,6 +363,7 @@ def decision_compare_view(request, framework_id=None):
         "decisions/compare.html",
         {
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "compare_type": compare_type,
             "all_objectives": all_objectives,
             "all_goals": all_goals,

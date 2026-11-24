@@ -16,7 +16,7 @@ from frameworks.services import remove_sample_frameworks, seed_sample_framework
 def _get_user_framework(user, framework_id=None):
     if framework_id:
         return get_object_or_404(Framework, id=framework_id, owner=user)
-    fw = Framework.objects.filter(owner=user).first()
+    fw = Framework.objects.filter(owner=user).order_by("name").first()
     if not fw:
         fw = Framework.objects.create(owner=user, name="My Personal Priorities")
     return fw
@@ -25,7 +25,7 @@ def _get_user_framework(user, framework_id=None):
 @login_required
 def workspace_view(request, framework_id=None):
     framework = _get_user_framework(request.user, framework_id)
-    user_frameworks = Framework.objects.filter(owner=request.user)
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
     domains = framework.domains.prefetch_related(
         "whys",
         "primary_objectives__whys",
@@ -434,11 +434,14 @@ def review_view(request, framework_id=None):
         objectives = objectives.filter(last_reviewed_at__isnull=False, last_reviewed_at__lt=cutoff)
         goals = goals.filter(last_reviewed_at__isnull=False, last_reviewed_at__lt=cutoff)
 
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
+
     return render(
         request,
         "frameworks/review.html",
         {
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "whys": whys,
             "objectives": objectives,
             "goals": goals,
