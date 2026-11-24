@@ -359,7 +359,7 @@ class UserProfileForm(UniqueEmailMixin, forms.ModelForm):
         if theme_preference and hasattr(user, "llm_config"):
             user.llm_config.theme_preference = theme_preference
             if commit:
-                user.llm_config.save()
+                user.llm_config.save(update_fields=["theme_preference"])
         return user
 
 

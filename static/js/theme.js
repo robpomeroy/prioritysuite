@@ -14,9 +14,22 @@
 
     function getPreferredTheme() {
         // If a server theme is specified (e.g. user selected in profile settings),
-        // give precedence to server theme unless the user used the client toggle in this session
+        // synchronize LocalStorage when server preference has changed.
         const server = getServerTheme();
         const stored = getStoredTheme();
+        const lastServer = localStorage.getItem('prioritysuite-server-theme');
+
+        if (server) {
+            if (server !== lastServer) {
+                // Server profile preference changed or newly loaded: update LocalStorage
+                localStorage.setItem('prioritysuite-server-theme', server);
+                setStoredTheme(server);
+                return (server === 'auto')
+                    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                    : server;
+            }
+        }
+
         if (stored && stored !== 'auto') {
             return stored;
         }

@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -130,7 +131,15 @@ def domain_create_view(request, framework_id):
             return redirect("frameworks:workspace_detail", framework_id=framework.id)
     else:
         form = DomainForm()
-    return render(request, "frameworks/form_modal.html", {"form": form, "title": "Add New Domain"})
+    return render(
+        request,
+        "frameworks/form_modal.html",
+        {
+            "form": form,
+            "title": "Add New Domain",
+            "cancel_url": reverse("frameworks:workspace_detail", args=[framework.id]),
+        },
+    )
 
 
 @login_required
@@ -147,7 +156,11 @@ def domain_edit_view(request, domain_id):
     return render(
         request,
         "frameworks/form_modal.html",
-        {"form": form, "title": f"Edit Domain: {domain.name}"},
+        {
+            "form": form,
+            "title": f"Edit Domain: {domain.name}",
+            "cancel_url": reverse("frameworks:workspace_detail", args=[domain.framework_id]),
+        },
     )
 
 
@@ -163,7 +176,11 @@ def domain_delete_view(request, domain_id):
     return render(
         request,
         "frameworks/confirm_delete.html",
-        {"item_type": "Domain", "item_name": domain.name},
+        {
+            "item_type": "Domain",
+            "item_name": domain.name,
+            "cancel_url": reverse("frameworks:workspace_detail", args=[fw_id]),
+        },
     )
 
 
@@ -187,6 +204,7 @@ def why_create_view(request, domain_id):
             "form": form,
             "title": f"Add Why in {domain.name}",
             "guidance": "Why does this area matter to you? Why should anything happen here?",
+            "cancel_url": reverse("frameworks:workspace_detail", args=[domain.framework_id]),
         },
     )
 
@@ -202,7 +220,15 @@ def why_edit_view(request, why_id):
             return redirect("frameworks:workspace_detail", framework_id=why.domain.framework_id)
     else:
         form = WhyForm(instance=why)
-    return render(request, "frameworks/form_modal.html", {"form": form, "title": "Edit Why"})
+    return render(
+        request,
+        "frameworks/form_modal.html",
+        {
+            "form": form,
+            "title": "Edit Why",
+            "cancel_url": reverse("frameworks:workspace_detail", args=[why.domain.framework_id]),
+        },
+    )
 
 
 @login_required
@@ -214,7 +240,13 @@ def why_delete_view(request, why_id):
         messages.info(request, "Why deleted.")
         return redirect("frameworks:workspace_detail", framework_id=fw_id)
     return render(
-        request, "frameworks/confirm_delete.html", {"item_type": "Why", "item_name": why.title}
+        request,
+        "frameworks/confirm_delete.html",
+        {
+            "item_type": "Why",
+            "item_name": why.title,
+            "cancel_url": reverse("frameworks:workspace_detail", args=[fw_id]),
+        },
     )
 
 
@@ -238,6 +270,7 @@ def objective_create_view(request, framework_id):
             "form": form,
             "title": "Add New Objective",
             "guidance": "What would you like your Whys to lead to?",
+            "cancel_url": reverse("frameworks:workspace_detail", args=[framework.id]),
         },
     )
 
@@ -256,7 +289,15 @@ def objective_edit_view(request, objective_id):
             return redirect("frameworks:workspace_detail", framework_id=framework.id)
     else:
         form = ObjectiveForm(instance=objective, framework=framework)
-    return render(request, "frameworks/form_modal.html", {"form": form, "title": "Edit Objective"})
+    return render(
+        request,
+        "frameworks/form_modal.html",
+        {
+            "form": form,
+            "title": "Edit Objective",
+            "cancel_url": reverse("frameworks:workspace_detail", args=[framework.id]),
+        },
+    )
 
 
 @login_required
@@ -272,7 +313,11 @@ def objective_delete_view(request, objective_id):
     return render(
         request,
         "frameworks/confirm_delete.html",
-        {"item_type": "Objective", "item_name": objective.title},
+        {
+            "item_type": "Objective",
+            "item_name": objective.title,
+            "cancel_url": reverse("frameworks:workspace_detail", args=[fw_id]),
+        },
     )
 
 
@@ -296,6 +341,7 @@ def goal_create_view(request, framework_id):
             "form": form,
             "title": "Add New Goal",
             "guidance": "What specifically will you do or achieve?",
+            "cancel_url": reverse("frameworks:workspace_detail", args=[framework.id]),
         },
     )
 
@@ -312,7 +358,15 @@ def goal_edit_view(request, goal_id):
             return redirect("frameworks:workspace_detail", framework_id=framework.id)
     else:
         form = GoalForm(instance=goal, framework=framework)
-    return render(request, "frameworks/form_modal.html", {"form": form, "title": "Edit Goal"})
+    return render(
+        request,
+        "frameworks/form_modal.html",
+        {
+            "form": form,
+            "title": "Edit Goal",
+            "cancel_url": reverse("frameworks:workspace_detail", args=[framework.id]),
+        },
+    )
 
 
 @login_required
@@ -324,7 +378,13 @@ def goal_delete_view(request, goal_id):
         messages.info(request, "Goal deleted.")
         return redirect("frameworks:workspace_detail", framework_id=fw_id)
     return render(
-        request, "frameworks/confirm_delete.html", {"item_type": "Goal", "item_name": goal.title}
+        request,
+        "frameworks/confirm_delete.html",
+        {
+            "item_type": "Goal",
+            "item_name": goal.title,
+            "cancel_url": reverse("frameworks:workspace_detail", args=[fw_id]),
+        },
     )
 
 

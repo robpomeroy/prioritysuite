@@ -64,7 +64,7 @@
                                 {% endif %}
                                 {% if request.user.is_superuser or not u.is_staff and not u.is_superuser %}
                                     {% if u.email %}
-                                        <form method="post" action="{% url 'accounts:user_send_password_reset' u.id %}" class="d-inline" onsubmit="return confirm('Send password reset email to {{ u.email }}?');">
+                                        <form method="post" action="{% url 'accounts:user_send_password_reset' u.id %}" class="d-inline" onsubmit="return confirm('Send password reset email to {{ u.email|escapejs }}?');">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-outline-secondary btn-sm" title="Email Password Reset Link">Send Reset</button>
                                         </form>

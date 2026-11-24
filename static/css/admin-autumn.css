@@ -89,10 +89,10 @@ html[data-theme="light"] {
         --selected-row: #382D24;
 
         --button-fg: #EDE4D9;
-        --button-bg: #B85D3B;
-        --button-hover-bg: #D97954;
-        --default-button-bg: #B85D3B;
-        --default-button-hover-bg: #D97954;
+        --button-bg: #8A3E22;
+        --button-hover-bg: #9E4E30;
+        --default-button-bg: #8A3E22;
+        --default-button-hover-bg: #9E4E30;
 
         --close-button-bg: #423832;
         --close-button-hover-bg: #5A4E45;
@@ -139,10 +139,10 @@ html[data-theme="dark"] {
     --selected-row: #382D24;
 
     --button-fg: #EDE4D9;
-    --button-bg: #B85D3B;
-    --button-hover-bg: #D97954;
-    --default-button-bg: #B85D3B;
-    --default-button-hover-bg: #D97954;
+    --button-bg: #8A3E22;
+    --button-hover-bg: #9E4E30;
+    --default-button-bg: #8A3E22;
+    --default-button-hover-bg: #9E4E30;
 
     --close-button-bg: #423832;
     --close-button-hover-bg: #5A4E45;
