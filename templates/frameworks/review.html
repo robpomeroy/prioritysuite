@@ -125,10 +125,10 @@
                                     {{ obj.get_status_display }}
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                    <li><form method="post" action="{% url 'frameworks:objective_status' obj.id %}">{% csrf_token %}<input type="hidden" name="status" value="ACTIVE"><button class="dropdown-item small">Mark Active</button></form></li>
-                                    <li><form method="post" action="{% url 'frameworks:objective_status' obj.id %}">{% csrf_token %}<input type="hidden" name="status" value="PAUSED"><button class="dropdown-item small">Mark Paused</button></form></li>
-                                    <li><form method="post" action="{% url 'frameworks:objective_status' obj.id %}">{% csrf_token %}<input type="hidden" name="status" value="COMPLETED"><button class="dropdown-item small">Mark Completed</button></form></li>
-                                    <li><form method="post" action="{% url 'frameworks:objective_status' obj.id %}">{% csrf_token %}<input type="hidden" name="status" value="ABANDONED"><button class="dropdown-item small">Mark Abandoned</button></form></li>
+                                    <li><form method="post" action="{% url 'frameworks:objective_status' obj.id %}">{% csrf_token %}<input type="hidden" name="status" value="ACTIVE"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="dropdown-item small">Mark Active</button></form></li>
+                                    <li><form method="post" action="{% url 'frameworks:objective_status' obj.id %}">{% csrf_token %}<input type="hidden" name="status" value="PAUSED"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="dropdown-item small">Mark Paused</button></form></li>
+                                    <li><form method="post" action="{% url 'frameworks:objective_status' obj.id %}">{% csrf_token %}<input type="hidden" name="status" value="COMPLETED"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="dropdown-item small">Mark Completed</button></form></li>
+                                    <li><form method="post" action="{% url 'frameworks:objective_status' obj.id %}">{% csrf_token %}<input type="hidden" name="status" value="ABANDONED"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="dropdown-item small">Mark Abandoned</button></form></li>
                                 </ul>
                             </div>
                         </div>
@@ -171,10 +171,10 @@
                                     {{ goal.get_status_display }}
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                    <li><form method="post" action="{% url 'frameworks:goal_status' goal.id %}">{% csrf_token %}<input type="hidden" name="status" value="ACTIVE"><button class="dropdown-item small">Mark Active</button></form></li>
-                                    <li><form method="post" action="{% url 'frameworks:goal_status' goal.id %}">{% csrf_token %}<input type="hidden" name="status" value="PAUSED"><button class="dropdown-item small">Mark Paused</button></form></li>
-                                    <li><form method="post" action="{% url 'frameworks:goal_status' goal.id %}">{% csrf_token %}<input type="hidden" name="status" value="COMPLETED"><button class="dropdown-item small">Mark Completed</button></form></li>
-                                    <li><form method="post" action="{% url 'frameworks:goal_status' goal.id %}">{% csrf_token %}<input type="hidden" name="status" value="ABANDONED"><button class="dropdown-item small">Mark Abandoned</button></form></li>
+                                    <li><form method="post" action="{% url 'frameworks:goal_status' goal.id %}">{% csrf_token %}<input type="hidden" name="status" value="ACTIVE"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="dropdown-item small">Mark Active</button></form></li>
+                                    <li><form method="post" action="{% url 'frameworks:goal_status' goal.id %}">{% csrf_token %}<input type="hidden" name="status" value="PAUSED"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="dropdown-item small">Mark Paused</button></form></li>
+                                    <li><form method="post" action="{% url 'frameworks:goal_status' goal.id %}">{% csrf_token %}<input type="hidden" name="status" value="COMPLETED"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="dropdown-item small">Mark Completed</button></form></li>
+                                    <li><form method="post" action="{% url 'frameworks:goal_status' goal.id %}">{% csrf_token %}<input type="hidden" name="status" value="ABANDONED"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="dropdown-item small">Mark Abandoned</button></form></li>
                                 </ul>
                             </div>
                         </div>

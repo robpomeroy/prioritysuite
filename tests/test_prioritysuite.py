@@ -125,7 +125,6 @@ def test_user_settings_update(client, user):
             "api_base": "https://openrouter.ai/api/v1",
             "raw_api_key": "new-secret-api-key",
             "consent_given": True,
-            "theme_preference": "dark",
         },
     )
     assert response.status_code == 302
@@ -133,6 +132,19 @@ def test_user_settings_update(client, user):
     assert config.provider == "openrouter"
     assert config.api_key == "new-secret-api-key"
     assert config.consent_given is True
+
+    # Updating profile updates theme_preference
+    profile_resp = client.post(
+        "/accounts/settings/profile/",
+        {
+            "first_name": "NewFirst",
+            "last_name": "NewLast",
+            "email": user.email,
+            "theme_preference": "dark",
+        },
+    )
+    assert profile_resp.status_code == 302
+    config.refresh_from_db()
     assert config.theme_preference == "dark"
 
 
@@ -2737,17 +2749,12 @@ def test_user_administration_crud_and_safety(client, user, other_user):
     assert "You cannot remove your own staff role." in self_edit_resp.content.decode()
     assert "You cannot remove your own superuser role." in self_edit_resp.content.decode()
 
-    # 5. Admin resets target user password
-    reset_resp = client.post(
-        f"/accounts/users/{new_user.id}/password/",
-        {
-            "new_password1": "ResetSecret123!",
-            "new_password2": "ResetSecret123!",
-        },
-    )
-    assert reset_resp.status_code == 302
-    new_user.refresh_from_db()
-    assert new_user.check_password("ResetSecret123!")
+    # 5. Direct password setting by admin is disabled; admin can send reset email
+    assert not client.post(f"/accounts/users/{new_user.id}/password/").status_code == 200
+
+    # Trigger password reset email to new_user
+    reset_email_resp = client.post(f"/accounts/users/{new_user.id}/send-reset/")
+    assert reset_email_resp.status_code == 302
 
     # 6. Admin deletes target user
     del_page = client.get(f"/accounts/users/{new_user.id}/delete/")
@@ -2780,18 +2787,17 @@ def test_staff_cannot_modify_or_delete_superusers(client, user, other_user):
     resp = client.get(f"/accounts/users/{other_user.id}/edit/")
     assert resp.status_code == 403
 
-    # Staff cannot reset superuser password
-    resp = client.get(f"/accounts/users/{other_user.id}/password/")
+    # Staff cannot trigger reset email for superuser
+    resp = client.post(f"/accounts/users/{other_user.id}/send-reset/")
     assert resp.status_code == 403
 
-    # Staff cannot reset ordinary user password
-    resp = client.get(f"/accounts/users/{ordinary_user.id}/password/")
-    assert resp.status_code == 403
-    post_resp = client.post(
-        f"/accounts/users/{ordinary_user.id}/password/",
-        {"new_password1": "TryHack123!", "new_password2": "TryHack123!"},
-    )
-    assert post_resp.status_code == 403
+    # Staff can trigger reset email for ordinary user
+    resp_ord = client.post(f"/accounts/users/{ordinary_user.id}/send-reset/")
+    assert resp_ord.status_code == 302
+
+    # Direct password override route does not exist
+    resp_404 = client.get(f"/accounts/users/{ordinary_user.id}/password/")
+    assert resp_404.status_code == 404
 
     # Cannot delete superuser
     resp = client.post(f"/accounts/users/{other_user.id}/delete/")
@@ -2949,7 +2955,7 @@ def test_version_display(client, user):
     resp = client.get("/accounts/settings/")
     assert resp.status_code == 200
     content = resp.content.decode()
-    assert "PrioritySuite v0.2.0" in content
+    assert "PrioritySuite v0.3.0" in content
 
 
 def test_registration_form_case_insensitive_duplicate_email(db):
@@ -3051,10 +3057,10 @@ def test_privacy_isolated_user_admin_password_and_deletion(client, db):
     resp = client.get(f"/admin/auth/user/{target_user.id}/password/")
     assert resp.status_code == 403
 
-    # Superuser can access password change page in admin
+    # Superuser attempting to access password change page in admin is disabled
     client.force_login(superuser)
     resp_super = client.get(f"/admin/auth/user/{target_user.id}/password/")
-    assert resp_super.status_code == 200
+    assert resp_super.status_code == 403
 
     # Ensure Framework, Domain, LLMConfig cascade deletion works
     # when superuser deletes user in Admin
@@ -3166,3 +3172,103 @@ def test_decision_form_validation_error_rendering(client, user, framework):
     content = resp.content.decode()
     assert "This field is required." in content
     assert "text-danger small mt-1" in content
+
+
+def test_email_password_reset_flow(client, user, mailoutbox):
+    # 1. User requests password reset via email
+    resp = client.get("/accounts/password-reset/")
+    assert resp.status_code == 200
+    assert "Reset Password" in resp.content.decode()
+
+    post_resp = client.post("/accounts/password-reset/", {"email": user.email})
+    assert post_resp.status_code == 302
+    assert post_resp.url == "/accounts/password-reset/done/"
+
+    # Check email was generated and sent
+    assert len(mailoutbox) == 1
+    mail = mailoutbox[0]
+    assert user.email in mail.to
+    assert "PrioritySuite Password Reset Request" in mail.subject
+    assert "/accounts/reset/" in mail.body
+
+    # Extract uidb64 and token from email body
+    import re
+
+    match = re.search(r"/accounts/reset/([^/]+)/([^/]+)/", mail.body)
+    assert match is not None
+    uidb64, token = match.group(1), match.group(2)
+
+    # 2. User accesses reset confirm page
+    # (redirects to set-password to avoid token leak in Referer)
+    confirm_get = client.get(f"/accounts/reset/{uidb64}/{token}/", follow=True)
+    assert confirm_get.status_code == 200
+    assert "Set New Password" in confirm_get.content.decode()
+
+    # 3. User sets new password
+    confirm_post = client.post(
+        f"/accounts/reset/{uidb64}/set-password/",
+        {"new_password1": "BrandNewSecret99!", "new_password2": "BrandNewSecret99!"},
+    )
+    assert confirm_post.status_code == 302
+    assert confirm_post.url == "/accounts/reset/done/"
+
+    # 4. Sign in with new password
+    login_resp = client.post(
+        "/accounts/login/", {"username": user.username, "password": "BrandNewSecret99!"}
+    )
+    assert login_resp.status_code == 302
+    assert login_resp.url == "/frameworks/"
+
+
+def test_staff_send_password_reset_email(client, db, mailoutbox):
+    staff_user = User.objects.create_user(
+        username="staff_member", email="staff@example.com", password="password", is_staff=True
+    )
+    regular_user = User.objects.create_user(
+        username="regular_person", email="regular@example.com", password="password"
+    )
+    no_email_user = User.objects.create_user(username="no_email", email="", password="password")
+
+    client.force_login(staff_user)
+
+    # Sending reset to user with email
+    resp = client.post(f"/accounts/users/{regular_user.id}/send-reset/")
+    assert resp.status_code == 302
+    assert len(mailoutbox) == 1
+    assert regular_user.email in mailoutbox[0].to
+
+    # Sending reset to user without email displays error
+    resp_no_email = client.post(f"/accounts/users/{no_email_user.id}/send-reset/")
+    assert resp_no_email.status_code == 302
+    assert len(mailoutbox) == 1  # No new email sent
+
+
+def test_profile_theme_mode_update(client, user):
+    client.force_login(user)
+    # Profile update now saves theme preference
+    resp = client.post(
+        "/accounts/settings/profile/",
+        {
+            "first_name": "Autumn",
+            "last_name": "Tester",
+            "email": user.email,
+            "theme_preference": "dark",
+        },
+    )
+    assert resp.status_code == 302
+    user.refresh_from_db()
+    assert user.first_name == "Autumn"
+    assert user.llm_config.theme_preference == "dark"
+
+
+def test_export_markdown_framework_switcher_and_links(client, user):
+    client.force_login(user)
+    fw1 = Framework.objects.create(owner=user, name="Main Export FW")
+    fw2 = Framework.objects.create(owner=user, name="Second Export FW")
+
+    resp = client.get(f"/exports/framework/{fw1.id}/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "Switch Framework" in content
+    assert f"/exports/framework/{fw2.id}/" in content
+    assert f"/frameworks/framework/{fw1.id}/" in content  # Return link

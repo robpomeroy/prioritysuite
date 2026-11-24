@@ -62,6 +62,7 @@ def export_framework_view(request, framework_id):
     # Build query string for download link keeping all filters
     download_query = request.GET.copy()
     download_query["download"] = "1"
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
 
     return render(
         request,
@@ -70,6 +71,7 @@ def export_framework_view(request, framework_id):
             "title": f"Markdown Export: {framework.name}",
             "markdown_content": md_content,
             "framework": framework,
+            "user_frameworks": user_frameworks,
             "all_domains": all_domains,
             "all_decisions": all_decisions,
             "selected_domain_ids": list(all_domains.values_list("id", flat=True))

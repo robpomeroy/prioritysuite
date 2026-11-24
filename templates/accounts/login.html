@@ -20,7 +20,10 @@
                         <input type="text" name="username" class="form-control" required autofocus>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small">Password</label>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label small mb-1">Password</label>
+                            <a href="{% url 'accounts:password_reset' %}" class="small text-muted text-decoration-none">Forgot password?</a>
+                        </div>
                         <input type="password" name="password" class="form-control" required>
                     </div>
                     <button type="submit" class="btn btn-primary bg-terracotta w-100">Sign In</button>

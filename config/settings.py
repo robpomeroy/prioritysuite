@@ -276,3 +276,24 @@ OLLAMA_ALLOWED_HOSTS = [
 
 # Encryption key for sensitive fields (BYOK API keys)
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
+
+# Email Configuration
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend"
+    if DEBUG
+    else "django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587" if not DEBUG else "25"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True" if not DEBUG else "False").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() in ("true", "1", "yes")
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", "PrioritySuite <noreply@prioritysuite.local>"
+)

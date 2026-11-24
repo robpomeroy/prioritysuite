@@ -1,0 +1,159 @@
+/* PrioritySuite Autumn Theme for Django Admin */
+
+:root,
+html[data-theme="light"] {
+    --primary: #B85D3B;          /* Terracotta */
+    --secondary: #53755C;        /* Sage */
+    --accent: #D48C2A;           /* Amber */
+    --primary-fg: #FFFFFF;
+
+    --body-fg: #2C221E;          /* Bark dark text */
+    --body-bg: #FAF6F0;          /* Parchment background */
+    --body-quiet-color: #736154;
+    --body-medium-color: #53453E;
+    --body-loud-color: #2C221E;
+
+    --header-color: #FAF6F0;
+    --header-branding-color: #FBF0D9;
+    --header-bg: #B85D3B;        /* Terracotta header */
+    --header-link-color: #FFFFFF;
+
+    --breadcrumbs-fg: #EBF3ED;
+    --breadcrumbs-link-fg: #FFFFFF;
+    --breadcrumbs-bg: #53755C;   /* Sage breadcrumbs */
+
+    --link-fg: #B85D3B;
+    --link-hover-color: #8B3E2F;
+    --link-selected-fg: #53755C;
+
+    --hairline-color: #E8DEC8;
+    --border-color: #E8DEC8;
+
+    --error-fg: #8B3E2F;
+    --message-success-bg: #EBF3ED;
+    --message-warning-bg: #FBF0D9;
+    --message-error-bg: #FDE8E8;
+
+    --darkened-bg: #F4EFE6;
+    --selected-bg: #EFE8DC;
+    --selected-row: #FBF0D9;
+
+    --button-fg: #FFFFFF;
+    --button-bg: #B85D3B;
+    --button-hover-bg: #9E4E30;
+    --default-button-bg: #B85D3B;
+    --default-button-hover-bg: #9E4E30;
+
+    --close-button-bg: #736154;
+    --close-button-hover-bg: #4A3B32;
+    --delete-button-bg: #8B3E2F;
+    --delete-button-hover-bg: #6D2F23;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --primary: #D97954;
+        --secondary: #6D9477;
+        --accent: #E2A03F;
+        --primary-fg: #EDE4D9;
+
+        --body-fg: #EDE4D9;
+        --body-bg: #1A1614;
+        --body-quiet-color: #A8988C;
+        --body-medium-color: #C0B4A9;
+        --body-loud-color: #FFFFFF;
+
+        --header-color: #EDE4D9;
+        --header-branding-color: #E2A03F;
+        --header-bg: #2B2420;
+        --header-link-color: #EDE4D9;
+
+        --breadcrumbs-fg: #A8988C;
+        --breadcrumbs-link-fg: #EDE4D9;
+        --breadcrumbs-bg: #241F1C;
+
+        --link-fg: #E88F6D;
+        --link-hover-color: #F8B499;
+        --link-selected-fg: #6D9477;
+
+        --hairline-color: #38302A;
+        --border-color: #423832;
+
+        --error-fg: #E35F5F;
+        --message-success-bg: #1D2B20;
+        --message-warning-bg: #3D2D14;
+        --message-error-bg: #4A1A1A;
+
+        --darkened-bg: #241F1C;
+        --selected-bg: #2E2723;
+        --selected-row: #382D24;
+
+        --button-fg: #EDE4D9;
+        --button-bg: #8A3E22;
+        --button-hover-bg: #9E4E30;
+        --default-button-bg: #8A3E22;
+        --default-button-hover-bg: #9E4E30;
+
+        --close-button-bg: #423832;
+        --close-button-hover-bg: #5A4E45;
+        --delete-button-bg: #B05543;
+        --delete-button-hover-bg: #C66754;
+    }
+}
+
+html[data-theme="dark"] {
+    --primary: #D97954;
+    --secondary: #6D9477;
+    --accent: #E2A03F;
+    --primary-fg: #EDE4D9;
+
+    --body-fg: #EDE4D9;
+    --body-bg: #1A1614;
+    --body-quiet-color: #A8988C;
+    --body-medium-color: #C0B4A9;
+    --body-loud-color: #FFFFFF;
+
+    --header-color: #EDE4D9;
+    --header-branding-color: #E2A03F;
+    --header-bg: #2B2420;
+    --header-link-color: #EDE4D9;
+
+    --breadcrumbs-fg: #A8988C;
+    --breadcrumbs-link-fg: #EDE4D9;
+    --breadcrumbs-bg: #241F1C;
+
+    --link-fg: #E88F6D;
+    --link-hover-color: #F8B499;
+    --link-selected-fg: #6D9477;
+
+    --hairline-color: #38302A;
+    --border-color: #423832;
+
+    --error-fg: #E35F5F;
+    --message-success-bg: #1D2B20;
+    --message-warning-bg: #3D2D14;
+    --message-error-bg: #4A1A1A;
+
+    --darkened-bg: #241F1C;
+    --selected-bg: #2E2723;
+    --selected-row: #382D24;
+
+    --button-fg: #EDE4D9;
+    --button-bg: #8A3E22;
+    --button-hover-bg: #9E4E30;
+    --default-button-bg: #8A3E22;
+    --default-button-hover-bg: #9E4E30;
+
+    --close-button-bg: #423832;
+    --close-button-hover-bg: #5A4E45;
+    --delete-button-bg: #B05543;
+    --delete-button-hover-bg: #C66754;
+}
+
+#header {
+    border-bottom: 2px solid var(--accent);
+}
+
+#branding h1 {
+    font-weight: 600;
+}
