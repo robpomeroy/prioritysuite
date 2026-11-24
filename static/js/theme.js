@@ -5,11 +5,19 @@
     }
 
     function getStoredTheme() {
-        return localStorage.getItem('prioritysuite-theme');
+        try {
+            return localStorage.getItem('prioritysuite-theme');
+        } catch (e) {
+            return null;
+        }
     }
 
     function setStoredTheme(theme) {
-        localStorage.setItem('prioritysuite-theme', theme);
+        try {
+            localStorage.setItem('prioritysuite-theme', theme);
+        } catch (e) {
+            // Storage quota exceeded or disabled
+        }
     }
 
     function getPreferredTheme() {
@@ -17,13 +25,22 @@
         // synchronize LocalStorage when server preference has changed.
         const server = getServerTheme();
         const stored = getStoredTheme();
-        const lastServer = localStorage.getItem('prioritysuite-server-theme');
+        let lastServer = null;
+        try {
+            lastServer = localStorage.getItem('prioritysuite-server-theme');
+        } catch (e) {
+            lastServer = null;
+        }
 
         if (server) {
             if (server !== lastServer) {
                 // Server profile preference changed or newly loaded: update LocalStorage
-                localStorage.setItem('prioritysuite-server-theme', server);
-                setStoredTheme(server);
+                try {
+                    localStorage.setItem('prioritysuite-server-theme', server);
+                    setStoredTheme(server);
+                } catch (e) {
+                    // Storage write rejected: apply server preference for current load
+                }
                 return (server === 'auto')
                     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
                     : server;

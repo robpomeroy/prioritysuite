@@ -27,7 +27,7 @@
                     {% endif %}
                 </div>
                 <div>
-                    <button id="copy-btn" class="btn btn-sm btn-outline-secondary me-2" onclick="navigator.clipboard.writeText(document.getElementById('md-content').value).then(() => { const b = document.getElementById('copy-btn'); b.textContent = '✓ Copied!'; setTimeout(() => b.textContent = 'Copy Markdown', 2000); }).catch(() => { const b = document.getElementById('copy-btn'); b.textContent = 'Copy failed'; setTimeout(() => b.textContent = 'Copy Markdown', 2000); });">Copy Markdown</button>
+                    <button id="copy-btn" class="btn btn-sm btn-outline-secondary me-2" onclick="(function() { const b = document.getElementById('copy-btn'); const text = document.getElementById('md-content').value; if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(() => { b.textContent = '✓ Copied!'; setTimeout(() => b.textContent = 'Copy Markdown', 2000); }).catch(() => { b.textContent = 'Copy failed'; setTimeout(() => b.textContent = 'Copy Markdown', 2000); }); } else { b.textContent = 'Copy failed'; setTimeout(() => b.textContent = 'Copy Markdown', 2000); } })()">Copy Markdown</button>
                     <a href="{{ download_url|default:'?download=1' }}" class="btn btn-sm btn-primary bg-terracotta">Download .md File</a>
                 </div>
             </div>
