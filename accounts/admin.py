@@ -27,6 +27,24 @@ class PrivacyIsolatedUserAdmin(BaseUserAdmin):
                 return False
         return super().has_delete_permission(request, obj)
 
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if not request.user.is_superuser:
+            for field in ("is_superuser", "is_staff", "groups", "user_permissions"):
+                if field not in readonly:
+                    readonly.append(field)
+        return readonly
+
+    def get_deleted_objects(self, objs, request):
+        perms_needed = set()
+        to_delete = []
+        for obj in objs:
+            if not self.has_delete_permission(request, obj):
+                perms_needed.add(obj._meta.verbose_name)
+            to_delete.append(f"{obj._meta.verbose_name.capitalize()}: {obj.username}")
+        model_count = {User._meta.verbose_name_plural: len(objs)}
+        return to_delete, model_count, perms_needed, []
+
 
 @admin.register(UserLLMConfig)
 class UserLLMConfigAdmin(admin.ModelAdmin):
@@ -75,9 +93,6 @@ class UserLLMConfigAdmin(admin.ModelAdmin):
         return super().has_change_permission(request, obj)
 
     def has_delete_permission(self, request, obj=None):
-        if obj is not None:
-            if request.user.is_superuser:
-                return True
-            if obj.user != request.user:
-                return False
+        if obj is not None and obj.user != request.user:
+            return False
         return super().has_delete_permission(request, obj)

@@ -81,9 +81,7 @@ def is_safe_ollama_endpoint(hostname: str) -> bool:
     is_debug = bool(getattr(settings, "DEBUG", False))
     allowlist = getattr(settings, "OLLAMA_ALLOWED_HOSTS", None)
     normalized_allowlist = (
-        {h.strip().lower() for h in allowlist if h.strip()}
-        if allowlist is not None
-        else set()
+        {h.strip().lower() for h in allowlist if h.strip()} if allowlist is not None else set()
     )
     loopback_allowed = is_debug or bool(normalized_allowlist & LOOPBACK_HOSTS)
 
@@ -223,7 +221,9 @@ class UniqueEmailMixin:
 
 
 def validate_password_confirmation(
-    form, password_field_name: str = "password", confirm_field_name: str = "password_confirm"  # nosec B107
+    form,
+    password_field_name: str = "password",
+    confirm_field_name: str = "password_confirm",  # nosec B107
 ):
     p1 = form.cleaned_data.get(password_field_name)
     p2 = form.cleaned_data.get(confirm_field_name)
@@ -344,14 +344,12 @@ class BaseAdminUserForm(UniqueEmailMixin, forms.ModelForm):
         if current_user and not current_user.is_superuser:
             if "is_staff" in self.fields:
                 self.fields["is_staff"].disabled = True
-                self.fields["is_staff"].help_text = (
-                    "Only superusers can grant staff permissions."
-                )
+                self.fields["is_staff"].help_text = "Only superusers can grant staff permissions."
             if "is_superuser" in self.fields:
                 self.fields["is_superuser"].disabled = True
-                self.fields["is_superuser"].help_text = (
-                    "Only superusers can grant superuser permissions."
-                )
+                self.fields[
+                    "is_superuser"
+                ].help_text = "Only superusers can grant superuser permissions."
 
 
 class AdminUserCreateForm(BaseAdminUserForm):
@@ -426,4 +424,3 @@ class CustomSetPasswordForm(SetPasswordForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.update({"class": "form-control"})
-

@@ -1833,7 +1833,7 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
     assert dec_admin.has_change_permission(req, dec) is True
     assert dec_admin.has_delete_permission(req, dec) is True
     assert dec_admin.has_change_permission(req, dec_other) is False
-    assert dec_admin.has_delete_permission(req, dec_other) is True
+    assert dec_admin.has_delete_permission(req, dec_other) is False
     assert dec_admin.has_view_permission(req, dec_other) is False
 
     req.user.is_superuser = False
@@ -1868,7 +1868,7 @@ def test_coverage_boosters(user, other_user, framework, domain, why, objective):
     assert ref_admin.has_change_permission(req, ref) is True
     assert ref_admin.has_delete_permission(req, ref) is True
     assert ref_admin.has_change_permission(req, ref_other) is False
-    assert ref_admin.has_delete_permission(req, ref_other) is True
+    assert ref_admin.has_delete_permission(req, ref_other) is False
     assert ref_admin.has_view_permission(req, ref_other) is False
 
     req.user.is_superuser = False
@@ -3064,6 +3064,36 @@ def test_privacy_isolated_user_admin_password_and_deletion(client, db):
 
     UserLLMConfig.objects.create(user=target_user, provider="openai")
 
+    # Confirmation page GET does not leak private framework/domain names
+    get_del = client.get(f"/admin/auth/user/{target_user.id}/delete/")
+    assert get_del.status_code == 200
+    del_content = get_del.content.decode()
+    assert "Target Framework" not in del_content
+    assert "Target Domain" not in del_content
+    assert f"User: {target_user.username}" in del_content
+
+    # Non-superuser staff cannot escalate privileges via admin user change form
+    from django.contrib.auth.models import Permission
+
+    change_perm = Permission.objects.get(codename="change_user")
+    staff_user.user_permissions.add(change_perm)
+
+    client.force_login(staff_user)
+    staff_edit_resp = client.get(f"/admin/auth/user/{staff_user.id}/change/")
+    assert staff_edit_resp.status_code == 200
+    # is_superuser and is_staff are readonly for non-superusers
+    assert "is_superuser" in staff_edit_resp.context["adminform"].readonly_fields
+    assert "is_staff" in staff_edit_resp.context["adminform"].readonly_fields
+
+    # Attempting to post is_superuser=on does not escalate
+    client.post(
+        f"/admin/auth/user/{staff_user.id}/change/",
+        {"username": "staff_admin", "email": "staff_admin@example.com", "is_superuser": "on"},
+    )
+    staff_user.refresh_from_db()
+    assert not staff_user.is_superuser
+
+    client.force_login(superuser)
     del_resp = client.post(f"/admin/auth/user/{target_user.id}/delete/", {"post": "yes"})
     assert del_resp.status_code == 302
     assert not User.objects.filter(id=target_user.id).exists()
@@ -3109,8 +3139,16 @@ def test_multi_framework_switchers_in_review_compare_chat(client, user):
     assert resp_comp.status_code == 200
     comp_content = resp_comp.content.decode()
     assert "Switch Framework" in comp_content
-    assert f"framework={fw1.id}" in comp_content
+    assert f"/decisions/compare/{fw1.id}/" in comp_content
     assert resp_comp.context["framework"].id == fw2.id
+
+    # Verify dedicated path compare_detail keeps framework in buttons and forms
+    resp_comp_detail = client.get(f"/decisions/compare/{fw2.id}/")
+    assert resp_comp_detail.status_code == 200
+    detail_content = resp_comp_detail.content.decode()
+    assert f"/decisions/compare/{fw2.id}/?type=objectives" in detail_content
+    assert f"/decisions/compare/{fw2.id}/?type=goals" in detail_content
+    assert f'action="/decisions/compare/{fw2.id}/"' in detail_content
 
     # 3. Chat view displays switcher dropdown
     resp_chat = client.get(f"/llm/framework/{fw1.id}/chat/")
