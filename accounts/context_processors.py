@@ -14,7 +14,8 @@ def user_preferences(request):
         "app_version": __version__,
         "demo_mode": getattr(settings, "DEMO_MODE", False),
         "is_demo_user": (
-            request.user.is_authenticated
+            bool(getattr(settings, "DEMO_MODE", False))
+            and request.user.is_authenticated
             and request.user.username == getattr(settings, "DEMO_USERNAME", "demo")
         ),
     }

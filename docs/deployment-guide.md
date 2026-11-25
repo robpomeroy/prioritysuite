@@ -263,11 +263,11 @@ After=network.target
 
 [Service]
 Type=oneshot
-User=prioritysuite
+User=www-data
 Group=www-data
 WorkingDirectory=/var/www/prioritysuite
 EnvironmentFile=/var/www/prioritysuite/.env
-ExecStart=/var/www/prioritysuite/.venv/bin/python manage.py reset_demo --username demo
+ExecStart=/var/www/prioritysuite/.venv/bin/python manage.py reset_demo
 ```
 
 2. Create a systemd timer `/etc/systemd/system/prioritysuite-reset-demo.timer`:
@@ -291,7 +291,9 @@ sudo systemctl list-timers --all | grep prioritysuite
 ```
 
 ### 4.3 Alternative: Periodic Reset via Cron
-Alternatively, add an hourly cron job for the `prioritysuite` system user:
+Alternatively, add an hourly cron job for the application user (`www-data`).
+Ensure the destination log file exists and is writable by `www-data` (e.g.
+`sudo touch /var/log/prioritysuite-demo-reset.log && sudo chown www-data:www-data /var/log/prioritysuite-demo-reset.log`):
 ```cron
 # Reset PrioritySuite demo frameworks at the top of every hour
 0 * * * * cd /var/www/prioritysuite && .venv/bin/python manage.py reset_demo >> /var/log/prioritysuite-demo-reset.log 2>&1

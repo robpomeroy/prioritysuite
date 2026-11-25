@@ -3318,6 +3318,19 @@ def test_demo_mode_management_command_and_login(db, client, settings):
     assert resp_del.status_code == 302
     assert User.objects.filter(username="demo_test").exists()
 
+    # When DEMO_MODE is False, demo restrictions must not apply
+    settings.DEMO_MODE = False
+    from accounts.views import _is_demo_user
+
+    assert not _is_demo_user(demo_user)
+    settings.DEMO_MODE = True
+
+    # Security check: rejected demo login if demo_user is staff, superuser, or has password
+    User.objects.create_user(username="staff_demo", password="secretpassword", is_staff=True)
+    settings.DEMO_USERNAME = "staff_demo"
+    resp_rejected = client.post("/accounts/demo-login/")
+    assert resp_rejected.status_code == 403
+
 
 def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
     client.force_login(user)
@@ -3370,4 +3383,21 @@ def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
     assert fw.domains.count() == 3
     assert fw.decisions.count() == 1
     assert fw.reflections.count() == 1
+
+    # Malformed envelope validation checks
+    bad_bytes_list = BytesIO(b"[]")
+    bad_bytes_list.name = "vault.json"
+    resp_bad_root = client.post(
+        "/accounts/settings/vault/restore/",
+        {"vault_file": bad_bytes_list, "password": "password123"},
+    )
+    assert resp_bad_root.status_code == 302
+
+    bad_bytes_fields = BytesIO(b'{"salt": 123, "ciphertext": 456}')
+    bad_bytes_fields.name = "vault.json"
+    resp_bad_fields = client.post(
+        "/accounts/settings/vault/restore/",
+        {"vault_file": bad_bytes_fields, "password": "password123"},
+    )
+    assert resp_bad_fields.status_code == 302
 

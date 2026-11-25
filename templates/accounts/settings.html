@@ -93,13 +93,13 @@
         <!-- Zero-Knowledge Encrypted Vault Backup (§11.2) -->
         <div class="card shadow-sm border mb-4">
             <div class="card-header bg-transparent py-3">
-                <h5 class="mb-0 text-terracotta">Zero-Knowledge Encrypted Vault (§11.2)</h5>
+                <h5 class="mb-0 text-terracotta">Password-Encrypted Vault Backup (§11.2)</h5>
             </div>
             <div class="card-body p-4">
                 <p class="text-muted small">
                     Export a cryptographic, password-encrypted backup of all your private frameworks, domains, whys, objectives, and decisions.
                     The backup is encrypted using <strong>PBKDF2-HMAC-SHA256 (100,000 rounds)</strong> and <strong>Fernet AES-128-CBC</strong> with your password.
-                    Not even a server administrator or database operator can inspect your vault without your password.
+                    The downloaded file is encrypted with your password. Data stored on the server is not protected by this password, and a server administrator or database operator can read it.
                 </p>
                 <div class="row g-3">
                     <div class="col-md-6 border-end-md">

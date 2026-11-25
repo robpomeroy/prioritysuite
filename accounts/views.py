@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 def _is_demo_user(user) -> bool:
+    if not getattr(settings, "DEMO_MODE", False):
+        return False
     demo_username = getattr(settings, "DEMO_USERNAME", "demo")
     return bool(user.is_authenticated and user.username == demo_username)
 
@@ -61,6 +63,16 @@ def demo_login_view(request):
 
     demo_username = getattr(settings, "DEMO_USERNAME", "demo")
     demo_user = User.objects.filter(username=demo_username, is_active=True).first()
+
+    # Verify dedicated demo user status: reject staff, superusers, or password-enabled users
+    if demo_user and (
+        demo_user.is_staff or demo_user.is_superuser or demo_user.has_usable_password()
+    ):
+        raise PermissionDenied(
+            f"Account '{demo_username}' cannot be used for public demo login because it is "
+            "a privileged or password-authenticated user account."
+        )
+
     if not demo_user:
         from django.core.management import call_command
 
@@ -166,7 +178,7 @@ def password_change_view(request):
 @login_required
 @require_POST
 def export_vault_view(request):
-    """Exports an encrypted zero-knowledge vault envelope using the user's password."""
+    """Exports a password-encrypted vault backup envelope using the user's password."""
     password = request.POST.get("password", "")
     if not password or not request.user.check_password(password):
         messages.error(request, "Incorrect password. Cannot export encrypted vault.")
@@ -205,9 +217,15 @@ def restore_vault_view(request):
     try:
         content = vault_file.read().decode("utf-8")
         envelope = json.loads(content)
+        if not isinstance(envelope, dict):
+            raise ValueError("Vault file root structure must be a JSON object.")
+        salt = envelope.get("salt")
+        ciphertext = envelope.get("ciphertext")
+        if not isinstance(salt, str) or not isinstance(ciphertext, str):
+            raise ValueError("Vault file must contain string 'salt' and 'ciphertext' fields.")
         count = decrypt_and_restore_vault(request.user, envelope, password)
         messages.success(request, f"Successfully restored {count} framework(s) from vault.")
-    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+    except (ValueError, KeyError, json.JSONDecodeError, AttributeError) as exc:
         messages.error(request, f"Failed to restore vault: {exc}")
 
     return redirect("accounts:settings")
