@@ -141,3 +141,38 @@ This verifies:
    (`python manage.py makemigrations --check --dry-run`).
 5. **Pytest:** Full automated test suite across all user isolation, CRUD,
    review, and decision support workflows with >=85% test coverage.
+
+---
+
+## 6. Demonstration Mode & Testing Commands
+
+PrioritySuite includes a dedicated demo system (§8.3 & §11.2) for public
+evaluations and showcase instances:
+
+### 6.1 Configuration Flags
+- `DEMO_MODE=True`: Enables the "Explore Live Demo" entrypoint on the login
+  page and displays the public evaluation banner.
+- `DEMO_USERNAME=demo`: Specifies the username assigned to the demo visitor
+  session (defaults to `demo`).
+
+### 6.2 The `reset_demo` Command
+The management command `python manage.py reset_demo` safely purges visitor
+modifications and rebuilds pristine starter frameworks:
+
+```bash
+# Reset the default demo account
+python manage.py reset_demo
+
+# Reset a custom demo account
+python manage.py reset_demo --username custom_demo
+```
+
+Under the hood, `reset_demo`:
+1. Creates or resets the specified user account with `is_active=True`,
+   `is_staff=False`, `is_superuser=False`, and an unusable password.
+2. Clears all existing frameworks and decision records owned by that user.
+3. Re-seeds three curated frameworks from `frameworks/services.py`
+   (`seed_sample_framework`, `seed_career_transition_framework`, and
+   `seed_creator_framework`).
+4. Re-initializes sample `DecisionRecord` tension analyses and simulated
+   `LLMReflectionLog` entries.

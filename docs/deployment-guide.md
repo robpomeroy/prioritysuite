@@ -228,3 +228,77 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 *(For Apache with `mod_proxy` and `mod_wsgi`, see standard Apache reverse proxy configuration using `ProxyPass / unix:/run/priorityprobe.sock|http://localhost/`)*.
+
+---
+
+## 4. Public Demonstration Instance Configuration (§8.3 & §11.2)
+
+If deploying a public showcase or evaluation server where visitors can test
+PrioritySuite without creating personal accounts:
+
+### 4.1 Enabling Demo Mode in Environment
+In `/var/www/prioritysuite/.env` (or Docker environment):
+```bash
+# Enable public demo mode
+DEMO_MODE=True
+DEMO_USERNAME=demo
+```
+
+When enabled:
+- The login view displays an **"Explore Live Demo"** button logging visitors
+  directly into the `demo` account.
+- The global layout displays an active evaluation banner.
+- Security boundaries prevent the demo user from changing passwords, editing
+  the email address, or deleting the account.
+
+### 4.2 Automated Periodic Reset via Systemd Timer
+To keep the public demo clean and prevent accumulation of test entries or
+inappropriate submissions, configure an automated reset timer:
+
+1. Create a systemd service `/etc/systemd/system/prioritysuite-reset-demo.service`:
+```ini
+[Unit]
+Description=Reset PrioritySuite Demo Data
+After=network.target
+
+[Service]
+Type=oneshot
+User=prioritysuite
+Group=www-data
+WorkingDirectory=/var/www/prioritysuite
+EnvironmentFile=/var/www/prioritysuite/.env
+ExecStart=/var/www/prioritysuite/.venv/bin/python manage.py reset_demo --username demo
+```
+
+2. Create a systemd timer `/etc/systemd/system/prioritysuite-reset-demo.timer`:
+```ini
+[Unit]
+Description=Hourly reset for PrioritySuite public demo instance
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+3. Enable and activate the timer:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now prioritysuite-reset-demo.timer
+sudo systemctl list-timers --all | grep prioritysuite
+```
+
+### 4.3 Alternative: Periodic Reset via Cron
+Alternatively, add an hourly cron job for the `prioritysuite` system user:
+```cron
+# Reset PrioritySuite demo frameworks at the top of every hour
+0 * * * * cd /var/www/prioritysuite && .venv/bin/python manage.py reset_demo >> /var/log/prioritysuite-demo-reset.log 2>&1
+```
+
+### 4.4 Docker Compose Demo Reset
+In a containerized deployment, run the reset command via cron or container execution:
+```bash
+docker compose exec web python manage.py reset_demo
+```
