@@ -3342,9 +3342,32 @@ def test_demo_mode_management_command_and_login(db, client, settings):
 
 def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
     client.force_login(user)
+    from datetime import UTC, datetime
+
+    from frameworks.models import Goal
     from frameworks.services import seed_sample_framework
 
     seed_sample_framework(user)
+
+    # Assign distinct fixed historical timestamps to source framework and items
+    t_fw = datetime(2023, 1, 15, 10, 30, tzinfo=UTC)
+    t_dec = datetime(2023, 2, 20, 14, 0, tzinfo=UTC)
+    t_obj = datetime(2023, 3, 10, 8, 45, tzinfo=UTC)
+    t_goal = datetime(2023, 4, 5, 16, 15, tzinfo=UTC)
+
+    src_fw = Framework.objects.get(owner=user)
+    Framework.objects.filter(id=src_fw.id).update(created_at=t_fw)
+    src_dec = src_fw.decisions.first()
+    src_fw.decisions.filter(id=src_dec.id).update(created_at=t_dec)
+    src_dom = src_fw.domains.first()
+    src_obj = src_dom.primary_objectives.first()
+    src_dom.primary_objectives.filter(id=src_obj.id).update(created_at=t_obj)
+    src_goal = Goal.objects.create(
+        primary_domain=src_dom,
+        title="Historical Goal",
+        target_date="2025-12-31",
+    )
+    Goal.objects.filter(id=src_goal.id).update(created_at=t_goal)
 
     # 1. Export encrypted vault with invalid password
     resp_bad = client.post("/accounts/settings/vault/export/", {"password": "wrong"})
@@ -3409,12 +3432,14 @@ def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
     )
     assert resp_bad_fields.status_code == 302
 
-    # Verify is_sample flag and original decision/framework/objective created_at are restored
+    # Verify is_sample flag and exact match on original created_at timestamps
     assert fw.is_sample is True
-    assert fw.created_at is not None
+    assert fw.created_at == t_fw
     dec = fw.decisions.first()
-    assert dec.created_at is not None
-    dom = fw.domains.first()
-    obj = dom.primary_objectives.first()
-    assert obj.created_at is not None
+    assert dec.created_at == t_dec
+    dom = fw.domains.get(name=src_dom.name)
+    obj = dom.primary_objectives.get(title=src_obj.title)
+    assert obj.created_at == t_obj
+    goal = dom.primary_goals.get(title="Historical Goal")
+    assert goal.created_at == t_goal
 
