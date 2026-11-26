@@ -570,9 +570,7 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
     return restored_count
 
 
-def decrypt_and_restore_vault(
-    user: User, vault_envelope: dict[str, Any], password: str
-) -> int:
+def decrypt_and_restore_vault(user: User, vault_envelope: dict[str, Any], password: str) -> int:
     """Decrypts a vault envelope using the supplied password and restores data."""
     salt_b64 = vault_envelope.get("salt")
     ciphertext = vault_envelope.get("ciphertext")
