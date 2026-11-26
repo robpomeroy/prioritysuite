@@ -3331,6 +3331,14 @@ def test_demo_mode_management_command_and_login(db, client, settings):
     resp_rejected = client.post("/accounts/demo-login/")
     assert resp_rejected.status_code == 403
 
+    # Inactive privileged or passworded account must also be rejected
+    User.objects.create_user(
+        username="inactive_pw_demo", password="secretpassword", is_active=False
+    )
+    settings.DEMO_USERNAME = "inactive_pw_demo"
+    resp_rejected_inactive = client.post("/accounts/demo-login/")
+    assert resp_rejected_inactive.status_code == 403
+
 
 def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
     client.force_login(user)
@@ -3400,4 +3408,9 @@ def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
         {"vault_file": bad_bytes_fields, "password": "password123"},
     )
     assert resp_bad_fields.status_code == 302
+
+    # Verify is_sample flag and original decision created_at are restored
+    assert fw.is_sample is True
+    dec = fw.decisions.first()
+    assert dec.created_at is not None
 

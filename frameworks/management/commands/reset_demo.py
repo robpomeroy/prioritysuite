@@ -35,6 +35,15 @@ class Command(BaseCommand):
         self.stdout.write(f"Resetting demonstration account '{username}'...")
 
         with transaction.atomic():
+            existing = User.objects.filter(username=username).first()
+            if existing and (
+                existing.is_staff or existing.is_superuser or existing.has_usable_password()
+            ):
+                raise ValueError(
+                    f"Refusing to reset '{username}': account has password or "
+                    "administrative privileges."
+                )
+
             demo_user, created = User.objects.get_or_create(
                 username=username,
                 defaults={

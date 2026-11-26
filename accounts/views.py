@@ -62,22 +62,27 @@ def demo_login_view(request):
         raise PermissionDenied("Demo mode is not enabled on this instance.")
 
     demo_username = getattr(settings, "DEMO_USERNAME", "demo")
-    demo_user = User.objects.filter(username=demo_username, is_active=True).first()
+    existing_user = User.objects.filter(username=demo_username).first()
 
-    # Verify dedicated demo user status: reject staff, superusers, or password-enabled users
-    if demo_user and (
-        demo_user.is_staff or demo_user.is_superuser or demo_user.has_usable_password()
+    # Reject if an existing account (active or inactive) is privileged or password-authenticated
+    if existing_user and (
+        existing_user.is_staff
+        or existing_user.is_superuser
+        or existing_user.has_usable_password()
     ):
         raise PermissionDenied(
             f"Account '{demo_username}' cannot be used for public demo login because it is "
             "a privileged or password-authenticated user account."
         )
 
-    if not demo_user:
+    # If demo user is missing or inactive, reset/provision it cleanly
+    if not existing_user or not existing_user.is_active:
         from django.core.management import call_command
 
         call_command("reset_demo", username=demo_username)
         demo_user = User.objects.get(username=demo_username)
+    else:
+        demo_user = existing_user
 
     login(request, demo_user)
     messages.success(request, "Welcome to the PrioritySuite live demonstration!")
