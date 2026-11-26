@@ -3319,14 +3319,39 @@ def test_demo_mode_management_command_and_login(db, client, settings):
     assert User.objects.filter(username="demo_test").exists()
 
     # Settings modifications, LLM test, and vault export disabled for demo user
-    resp_settings_post = client.post("/accounts/settings/", {"provider": "openai"})
-    assert resp_settings_post.status_code == 302
+    resp_settings_post = client.post(
+        "/accounts/settings/",
+        {"provider": "openai"},
+        follow=True,
+    )
+    assert resp_settings_post.status_code == 200
+    messages_settings = [m.message for m in resp_settings_post.context["messages"]]
+    assert "LLM configuration cannot be modified in the live demo." in messages_settings
 
-    resp_test_llm = client.post("/accounts/settings/test-llm/", {"provider": "openai"})
-    assert resp_test_llm.status_code == 302
+    with patch("llm.service.generate_reflection") as mock_gen:
+        resp_test_llm = client.post(
+            "/accounts/settings/test-llm/",
+            {
+                "provider": "openai",
+                "api_key": "sk-test-valid-key",
+                "model_name": "gpt-4o",
+                "consent_given": "true",
+            },
+            follow=True,
+        )
+        assert resp_test_llm.status_code == 200
+        messages_llm = [m.message for m in resp_test_llm.context["messages"]]
+        assert "External LLM connection testing is disabled in the live demo." in messages_llm
+        mock_gen.assert_not_called()
 
-    resp_vault_export = client.post("/accounts/settings/vault/export/", {"password": "pwd"})
-    assert resp_vault_export.status_code == 302
+    resp_vault_export = client.post(
+        "/accounts/settings/vault/export/",
+        {"password": "pwd"},
+        follow=True,
+    )
+    assert resp_vault_export.status_code == 200
+    messages_vault = [m.message for m in resp_vault_export.context["messages"]]
+    assert "Vault export is disabled in the live demo." in messages_vault
 
     # Prevent registration squatting of DEMO_USERNAME (client must be logged out)
     client.logout()
