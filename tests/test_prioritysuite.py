@@ -2955,7 +2955,7 @@ def test_version_display(client, user):
     resp = client.get("/accounts/settings/")
     assert resp.status_code == 200
     content = resp.content.decode()
-    assert "PrioritySuite v0.3.0" in content
+    assert "PrioritySuite v0.4.0" in content
 
 
 def test_registration_form_case_insensitive_duplicate_email(db):
@@ -3272,3 +3272,561 @@ def test_export_markdown_framework_switcher_and_links(client, user):
     assert "Switch Framework" in content
     assert f"/exports/framework/{fw2.id}/" in content
     assert f"/frameworks/framework/{fw1.id}/" in content  # Return link
+
+
+def test_demo_mode_management_command_and_login(db, client, settings):
+    settings.DEMO_MODE = True
+    settings.DEMO_USERNAME = "demo_test"
+
+    from django.core.management import call_command
+
+    call_command("reset_demo", username="demo_test")
+
+    demo_user = User.objects.get(username="demo_test")
+    assert demo_user.frameworks.count() == 3
+    assert demo_user.frameworks.filter(name="Career & Vocation Transition").exists()
+    assert demo_user.frameworks.filter(name="Independent Creator & Sustainable Pace").exists()
+
+    # Login screen shows demo button
+    resp_login = client.get("/accounts/login/")
+    assert resp_login.status_code == 200
+    assert "Explore Live Demo" in resp_login.content.decode()
+
+    # Single-click demo login
+    resp_demo_auth = client.post("/accounts/demo-login/")
+    assert resp_demo_auth.status_code == 302
+    assert resp_demo_auth.url == "/frameworks/"
+
+    # Demo mode banner is visible in base.html
+    client.force_login(demo_user)
+    resp_ws = client.get("/frameworks/")
+    assert "Demo Mode Active:" in resp_ws.content.decode()
+
+    # Security boundaries on demo user
+    resp_profile = client.post("/accounts/settings/profile/", {"first_name": "Hacked"})
+    assert resp_profile.status_code == 302
+    demo_user.refresh_from_db()
+    assert demo_user.first_name == "Demo"
+
+    resp_pwd = client.post(
+        "/accounts/settings/password/",
+        {"old_password": "pwd", "new_password1": "New", "new_password2": "New"},
+    )
+    assert resp_pwd.status_code == 302
+
+    resp_del = client.post("/accounts/delete-account/")
+    assert resp_del.status_code == 302
+    assert User.objects.filter(username="demo_test").exists()
+
+    # Settings modifications, LLM test, and vault export disabled for demo user
+    resp_settings_post = client.post(
+        "/accounts/settings/",
+        {"provider": "openai"},
+        follow=True,
+    )
+    assert resp_settings_post.status_code == 200
+    messages_settings = [m.message for m in resp_settings_post.context["messages"]]
+    assert "LLM configuration cannot be modified in the live demo." in messages_settings
+
+    with patch("llm.service.generate_reflection") as mock_gen:
+        resp_test_llm = client.post(
+            "/accounts/settings/test-llm/",
+            {
+                "provider": "openai",
+                "api_key": "sk-test-valid-key",
+                "model_name": "gpt-4o",
+                "consent_given": "true",
+            },
+            follow=True,
+        )
+        assert resp_test_llm.status_code == 200
+        messages_llm = [m.message for m in resp_test_llm.context["messages"]]
+        assert "External LLM connection testing is disabled in the live demo." in messages_llm
+        mock_gen.assert_not_called()
+
+    resp_vault_export = client.post(
+        "/accounts/settings/vault/export/",
+        {"password": "pwd"},
+        follow=True,
+    )
+    assert resp_vault_export.status_code == 200
+    messages_vault = [m.message for m in resp_vault_export.context["messages"]]
+    assert "Vault export is disabled in the live demo." in messages_vault
+
+    # Prevent registration squatting of DEMO_USERNAME (client must be logged out)
+    client.logout()
+    resp_reg_squat = client.post(
+        "/accounts/register/",
+        {
+            "username": "demo_test",
+            "email": "squatter@example.com",
+            "password": "Password123!",
+            "password_confirm": "Password123!",
+        },
+    )
+    assert resp_reg_squat.status_code == 200
+    assert "reserved for the demonstration account" in resp_reg_squat.content.decode()
+
+    # Re-running reset_demo on an existing demo user resets config and wipes API keys
+    from accounts.models import UserLLMConfig
+
+    cfg = UserLLMConfig.objects.get(user=demo_user)
+    cfg.api_key = "sk-test-secret-key-123"
+    cfg.theme_preference = "dark_autumn"
+    cfg.save()
+
+    call_command("reset_demo", username="demo_test")
+    cfg.refresh_from_db()
+    assert cfg.api_key == ""
+    assert cfg.theme_preference == "auto"
+
+    # reset_demo refuses to reset privileged or passworded accounts
+    User.objects.create_user(username="protected_user", password="secure_password")
+    with pytest.raises(ValueError, match="account has password"):
+        call_command("reset_demo", username="protected_user")
+
+    # When DEMO_MODE is False, demo restrictions must not apply
+    settings.DEMO_MODE = False
+    from accounts.views import _is_demo_user
+
+    assert not _is_demo_user(demo_user)
+    settings.DEMO_MODE = True
+
+    # Security check: rejected demo login if demo_user is staff, superuser, or has password
+    User.objects.create_user(username="staff_demo", password="secretpassword", is_staff=True)
+    settings.DEMO_USERNAME = "staff_demo"
+    resp_rejected = client.post("/accounts/demo-login/")
+    assert resp_rejected.status_code == 403
+
+    # Inactive privileged or passworded account must also be rejected
+    User.objects.create_user(
+        username="inactive_pw_demo", password="secretpassword", is_active=False
+    )
+    settings.DEMO_USERNAME = "inactive_pw_demo"
+    resp_rejected_inactive = client.post("/accounts/demo-login/")
+    assert resp_rejected_inactive.status_code == 403
+
+
+def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
+    client.force_login(user)
+    from datetime import UTC, datetime
+
+    from frameworks.models import Goal
+    from frameworks.services import seed_sample_framework
+
+    seed_sample_framework(user)
+
+    # Assign distinct fixed historical timestamps to source framework and items
+    t_fw = datetime(2023, 1, 15, 10, 30, tzinfo=UTC)
+    t_dec = datetime(2023, 2, 20, 14, 0, tzinfo=UTC)
+    t_obj = datetime(2023, 3, 10, 8, 45, tzinfo=UTC)
+    t_goal = datetime(2023, 4, 5, 16, 15, tzinfo=UTC)
+
+    src_fw = Framework.objects.get(owner=user)
+    Framework.objects.filter(id=src_fw.id).update(created_at=t_fw)
+    src_dec = src_fw.decisions.first()
+    src_fw.decisions.filter(id=src_dec.id).update(created_at=t_dec)
+    src_dom = src_fw.domains.first()
+    src_obj = src_dom.primary_objectives.first()
+    src_dom.primary_objectives.filter(id=src_obj.id).update(created_at=t_obj)
+    src_goal = Goal.objects.create(
+        primary_domain=src_dom,
+        title="Historical Goal",
+        target_date="2025-12-31",
+    )
+    Goal.objects.filter(id=src_goal.id).update(created_at=t_goal)
+
+    # 1. Export encrypted vault with invalid password
+    resp_bad = client.post("/accounts/settings/vault/export/", {"password": "wrong"})
+    assert resp_bad.status_code == 302
+    assert "messages" in resp_bad.cookies or resp_bad.url == "/accounts/settings/"
+
+    # 2. Export encrypted vault with correct password
+    resp_export = client.post("/accounts/settings/vault/export/", {"password": "password123"})
+    assert resp_export.status_code == 200
+    assert resp_export["Content-Type"] == "application/json"
+    assert "attachment; filename=" in resp_export["Content-Disposition"]
+
+    import json
+    from io import BytesIO
+
+    envelope = json.loads(resp_export.content.decode("utf-8"))
+    assert envelope["format"] == "prioritysuite-encrypted-vault-v1"
+    assert "ciphertext" in envelope
+
+    # 3. Simulate new user restoring from this vault
+    new_user = User.objects.create_user(username="restored_user", password="my_vault_password")
+    client.force_login(new_user)
+    assert Framework.objects.filter(owner=new_user).count() == 0
+
+    # Wrong password on restore fails
+    vault_bytes = BytesIO(resp_export.content)
+    vault_bytes.name = "vault.json"
+    resp_fail = client.post(
+        "/accounts/settings/vault/restore/",
+        {"vault_file": vault_bytes, "password": "wrong_vault_password"},
+    )
+    assert resp_fail.status_code == 302
+    assert Framework.objects.filter(owner=new_user).count() == 0
+
+    # Correct password restores user frameworks and items
+    vault_bytes.seek(0)
+    resp_ok = client.post(
+        "/accounts/settings/vault/restore/",
+        {"vault_file": vault_bytes, "password": "password123"},
+    )
+    assert resp_ok.status_code == 302
+    assert Framework.objects.filter(owner=new_user).count() == 1
+    fw = Framework.objects.get(owner=new_user)
+    assert fw.domains.count() == 3
+    assert fw.decisions.count() == 1
+    assert fw.reflections.count() == 1
+
+    # Malformed envelope validation checks
+    bad_bytes_list = BytesIO(b"[]")
+    bad_bytes_list.name = "vault.json"
+    resp_bad_root = client.post(
+        "/accounts/settings/vault/restore/",
+        {"vault_file": bad_bytes_list, "password": "password123"},
+    )
+    assert resp_bad_root.status_code == 302
+
+    bad_bytes_fields = BytesIO(b'{"salt": 123, "ciphertext": 456}')
+    bad_bytes_fields.name = "vault.json"
+    resp_bad_fields = client.post(
+        "/accounts/settings/vault/restore/",
+        {"vault_file": bad_bytes_fields, "password": "password123"},
+    )
+    assert resp_bad_fields.status_code == 302
+
+    # Verify is_sample flag and exact match on original created_at timestamps
+    assert fw.is_sample is True
+    assert fw.created_at == t_fw
+    dec = fw.decisions.first()
+    assert dec.created_at == t_dec
+    dom = fw.domains.get(name=src_dom.name)
+    assert dom.is_sample is True
+    assert dom.created_at is not None
+    obj = dom.primary_objectives.get(title=src_obj.title)
+    assert obj.is_sample is True
+    assert obj.created_at == t_obj
+    goal = dom.primary_goals.get(title="Historical Goal")
+    assert goal.created_at == t_goal
+
+    # Additional coverage tests for accounts/vault.py
+    from accounts.vault import derive_vault_key
+
+    # derive_vault_key rejects unsupported iterations
+    with pytest.raises(ValueError, match="Unsupported PBKDF2 iteration count"):
+        derive_vault_key("pwd", b"1234567890123456", iterations=999)
+
+    # Oversized payload rejected on export
+    from accounts.vault import create_encrypted_vault_payload
+
+    with patch("accounts.vault.MAX_RAW_VAULT_BYTES", 10):
+        with pytest.raises(ValueError, match="exceeds the maximum allowed export size"):
+            create_encrypted_vault_payload(new_user, "password123")
+
+    # Envelope validation checks in decrypt_and_restore_vault
+    from accounts.vault import decrypt_and_restore_vault
+
+    with pytest.raises(ValueError, match="root must be a JSON dictionary"):
+        decrypt_and_restore_vault(new_user, "not-a-dict", "pwd")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="Unsupported vault format version"):
+        decrypt_and_restore_vault(new_user, {"format": "invalid-v0"}, "pwd")
+
+    with pytest.raises(ValueError, match="Unsupported key derivation function"):
+        decrypt_and_restore_vault(
+            new_user,
+            {"format": "prioritysuite-encrypted-vault-v1", "kdf": "MD5"},
+            "pwd",
+        )
+
+    with pytest.raises(ValueError, match="missing or invalid salt or ciphertext"):
+        decrypt_and_restore_vault(
+            new_user,
+            {
+                "format": "prioritysuite-encrypted-vault-v1",
+                "kdf": "PBKDF2-HMAC-SHA256",
+                "salt": None,
+                "ciphertext": None,
+            },
+            "pwd",
+        )
+
+    with pytest.raises(ValueError, match="exceeds maximum allowed size"):
+        decrypt_and_restore_vault(
+            new_user,
+            {
+                "format": "prioritysuite-encrypted-vault-v1",
+                "kdf": "PBKDF2-HMAC-SHA256",
+                "salt": "c2FsdHNhbHRzYWx0",
+                "ciphertext": "x" * 20_000_000,
+            },
+            "pwd",
+        )
+
+    with pytest.raises(ValueError, match="Unsupported or unauthorized PBKDF2"):
+        decrypt_and_restore_vault(
+            new_user,
+            {
+                "format": "prioritysuite-encrypted-vault-v1",
+                "kdf": "PBKDF2-HMAC-SHA256",
+                "salt": "c2FsdHNhbHRzYWx0",
+                "ciphertext": "validciphertext",
+                "iterations": 1234,
+            },
+            "pwd",
+        )
+
+    with pytest.raises(ValueError, match="Invalid salt in vault envelope"):
+        decrypt_and_restore_vault(
+            new_user,
+            {
+                "format": "prioritysuite-encrypted-vault-v1",
+                "kdf": "PBKDF2-HMAC-SHA256",
+                "salt": "invalid-base64!@#",
+                "ciphertext": "validciphertext",
+            },
+            "pwd",
+        )
+
+    with pytest.raises(ValueError, match="Invalid salt length in vault envelope"):
+        import base64
+
+        short_salt = base64.b64encode(b"short").decode("utf-8")
+        decrypt_and_restore_vault(
+            new_user,
+            {
+                "format": "prioritysuite-encrypted-vault-v1",
+                "kdf": "PBKDF2-HMAC-SHA256",
+                "salt": short_salt,
+                "ciphertext": "validciphertext",
+            },
+            "pwd",
+        )
+
+    # restore_user_data_from_dict validation paths
+    from accounts.vault import restore_user_data_from_dict
+
+    with pytest.raises(ValueError, match="Decrypted vault payload must be a JSON dictionary"):
+        restore_user_data_from_dict(new_user, "not-a-dict")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="Vault payload 'frameworks' field must be a list"):
+        restore_user_data_from_dict(new_user, {"frameworks": "not-a-list"})
+
+    with pytest.raises(ValueError, match="Framework entry in vault payload must be a dictionary"):
+        restore_user_data_from_dict(new_user, {"frameworks": ["not-a-dict"]})
+
+    with pytest.raises(ValueError, match="created_at must be a string"):
+        restore_user_data_from_dict(new_user, {"frameworks": [{"name": "F", "created_at": 123}]})
+
+    with pytest.raises(ValueError, match="Domains list in framework"):
+        restore_user_data_from_dict(new_user, {"frameworks": [{"name": "F", "domains": "bad"}]})
+
+    with pytest.raises(ValueError, match="Domain entry must be a dictionary"):
+        restore_user_data_from_dict(new_user, {"frameworks": [{"name": "F", "domains": ["bad"]}]})
+
+    with pytest.raises(ValueError, match="Whys in domain"):
+        restore_user_data_from_dict(
+            new_user, {"frameworks": [{"name": "F", "domains": [{"name": "D", "whys": "bad"}]}]}
+        )
+
+    with pytest.raises(ValueError, match="Why entry must be a dictionary"):
+        restore_user_data_from_dict(
+            new_user, {"frameworks": [{"name": "F", "domains": [{"name": "D", "whys": ["bad"]}]}]}
+        )
+
+    with pytest.raises(ValueError, match="Objectives in domain"):
+        restore_user_data_from_dict(
+            new_user,
+            {"frameworks": [{"name": "F", "domains": [{"name": "D", "objectives": "bad"}]}]},
+        )
+
+    with pytest.raises(ValueError, match="Objective entry must be a dictionary"):
+        restore_user_data_from_dict(
+            new_user,
+            {"frameworks": [{"name": "F", "domains": [{"name": "D", "objectives": ["bad"]}]}]},
+        )
+
+    with pytest.raises(ValueError, match="Objective 'O' created_at must be a string"):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "domains": [
+                            {"name": "D", "objectives": [{"title": "O", "created_at": 123}]}
+                        ],
+                    }
+                ]
+            },
+        )
+
+    with pytest.raises(ValueError, match="why_ids must be a list"):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "domains": [
+                            {"name": "D", "objectives": [{"title": "O", "why_ids": "bad"}]}
+                        ],
+                    }
+                ]
+            },
+        )
+
+    with pytest.raises(ValueError, match="related_domain_ids must be a list"):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "domains": [
+                            {
+                                "name": "D",
+                                "objectives": [{"title": "O", "related_domain_ids": "bad"}],
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
+
+    with pytest.raises(ValueError, match="Goals in domain"):
+        restore_user_data_from_dict(
+            new_user, {"frameworks": [{"name": "F", "domains": [{"name": "D", "goals": "bad"}]}]}
+        )
+
+    with pytest.raises(ValueError, match="Goal entry must be a dictionary"):
+        restore_user_data_from_dict(
+            new_user, {"frameworks": [{"name": "F", "domains": [{"name": "D", "goals": ["bad"]}]}]}
+        )
+
+    with pytest.raises(ValueError, match="Goal 'G' created_at must be a string"):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "domains": [{"name": "D", "goals": [{"title": "G", "created_at": 123}]}],
+                    }
+                ]
+            },
+        )
+
+    with pytest.raises(ValueError, match="objective_ids must be a list"):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "domains": [
+                            {"name": "D", "goals": [{"title": "G", "objective_ids": "bad"}]}
+                        ],
+                    }
+                ]
+            },
+        )
+
+    with pytest.raises(ValueError, match="Decisions in framework"):
+        restore_user_data_from_dict(new_user, {"frameworks": [{"name": "F", "decisions": "bad"}]})
+
+    with pytest.raises(ValueError, match="Decision entry must be a dictionary"):
+        restore_user_data_from_dict(
+            new_user, {"frameworks": [{"name": "F", "decisions": ["bad"]}]}
+        )
+
+    with pytest.raises(ValueError, match="Decision 'Dec' created_at must be a string"):
+        restore_user_data_from_dict(
+            new_user,
+            {"frameworks": [{"name": "F", "decisions": [{"title": "Dec", "created_at": 123}]}]},
+        )
+
+    with pytest.raises(ValueError, match="Reflections in framework"):
+        restore_user_data_from_dict(
+            new_user, {"frameworks": [{"name": "F", "reflections": "bad"}]}
+        )
+
+    with pytest.raises(ValueError, match="Reflection entry must be a dictionary"):
+        restore_user_data_from_dict(
+            new_user, {"frameworks": [{"name": "F", "reflections": ["bad"]}]}
+        )
+
+    with pytest.raises(ValueError, match="Reflection log created_at must be a string"):
+        restore_user_data_from_dict(
+            new_user,
+            {"frameworks": [{"name": "F", "reflections": [{"created_at": 123}]}]},
+        )
+
+    # Legacy archive restore fallback (by title and name without IDs)
+    legacy_payload = {
+        "frameworks": [
+            {
+                "name": "Legacy FW",
+                "description": "Legacy fallback test",
+                "domains": [
+                    {
+                        "name": "Domain A",
+                        "whys": [{"title": "Why A"}],
+                        "objectives": [
+                            {
+                                "title": "Obj A",
+                                "whys": ["Why A"],
+                                "related_domains": ["Domain A"],
+                            }
+                        ],
+                        "goals": [
+                            {
+                                "title": "Goal A",
+                                "objectives": ["Obj A"],
+                                "related_domains": ["Domain A"],
+                            }
+                        ],
+                    }
+                ],
+                "decisions": [
+                    {
+                        "title": "Dec A",
+                        "affected_domains": ["Domain A"],
+                        "relevant_whys": ["Why A"],
+                        "supporting_objectives": ["Obj A"],
+                        "conflicting_objectives": ["Obj A"],
+                    }
+                ],
+                "reflections": [
+                    {
+                        "decision_title": "Dec A",
+                        "user_prompt": "Prompt",
+                        "context_snapshot": "Context",
+                        "llm_response": "Response",
+                    }
+                ],
+            }
+        ]
+    }
+    legacy_count = restore_user_data_from_dict(new_user, legacy_payload)
+    assert legacy_count == 1
+    leg_fw = Framework.objects.get(name="Legacy FW")
+    assert leg_fw.domains.count() == 1
+    leg_dom = leg_fw.domains.first()
+    leg_obj = leg_dom.primary_objectives.first()
+    assert leg_obj.whys.count() == 1
+    assert leg_obj.related_domains.count() == 1
+    leg_goal = leg_dom.primary_goals.first()
+    assert leg_goal.objectives.count() == 1
+    assert leg_goal.related_domains.count() == 1
+    leg_dec = leg_fw.decisions.first()
+    assert leg_dec.affected_domains.count() == 1
+    assert leg_dec.relevant_whys.count() == 1
+    assert leg_dec.supporting_objectives.count() == 1
+    assert leg_dec.conflicting_objectives.count() == 1
+    assert leg_fw.reflections.count() == 1
+    assert leg_fw.reflections.first().decision == leg_dec

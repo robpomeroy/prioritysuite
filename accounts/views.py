@@ -1,5 +1,7 @@
+import json
 import logging
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -21,6 +23,13 @@ from accounts.forms import (
 from accounts.models import UserLLMConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _is_demo_user(user) -> bool:
+    if not getattr(settings, "DEMO_MODE", False):
+        return False
+    demo_username = getattr(settings, "DEMO_USERNAME", "demo")
+    return bool(user.is_authenticated and user.username == demo_username)
 
 
 def _require_admin(user):
@@ -46,10 +55,48 @@ def register_view(request):
     return render(request, "accounts/register.html", {"form": form})
 
 
+@require_POST
+def demo_login_view(request):
+    """Logs the visitor into the demonstration account if DEMO_MODE is enabled (§8.3)."""
+    if not getattr(settings, "DEMO_MODE", False):
+        raise PermissionDenied("Demo mode is not enabled on this instance.")
+
+    demo_username = getattr(settings, "DEMO_USERNAME", "demo")
+    existing_user = User.objects.filter(username=demo_username).first()
+
+    # Reject if an existing account (active or inactive) is privileged or password-authenticated
+    if existing_user and (
+        existing_user.is_staff
+        or existing_user.is_superuser
+        or existing_user.has_usable_password()
+    ):
+        raise PermissionDenied(
+            f"Account '{demo_username}' cannot be used for public demo login because it is "
+            "a privileged or password-authenticated user account."
+        )
+
+    # If demo user is missing or inactive, reset/provision it cleanly
+    if not existing_user or not existing_user.is_active:
+        from django.core.management import call_command
+
+        call_command("reset_demo", username=demo_username)
+        demo_user = User.objects.get(username=demo_username)
+    else:
+        demo_user = existing_user
+
+    login(request, demo_user)
+    messages.success(request, "Welcome to the PrioritySuite live demonstration!")
+    return redirect("frameworks:workspace")
+
+
 @login_required
 def settings_view(request):
     config, _ = UserLLMConfig.objects.get_or_create(user=request.user)
     if request.method == "POST":
+        if _is_demo_user(request.user):
+            messages.warning(request, "LLM configuration cannot be modified in the live demo.")
+            return redirect("accounts:settings")
+
         old_provider = config.provider
         old_api_base = (config.api_base or "").strip()
         form = UserLLMConfigForm(request.POST, instance=config)
@@ -83,6 +130,10 @@ def settings_view(request):
 @login_required
 @require_POST
 def profile_update_view(request):
+    if _is_demo_user(request.user):
+        messages.warning(request, "Profile modifications are disabled in the live demo.")
+        return redirect("accounts:settings")
+
     config, _ = UserLLMConfig.objects.get_or_create(user=request.user)
     profile_form = UserProfileForm(request.POST, instance=request.user)
     if profile_form.is_valid():
@@ -107,6 +158,10 @@ def profile_update_view(request):
 @login_required
 @require_POST
 def password_change_view(request):
+    if _is_demo_user(request.user):
+        messages.warning(request, "Password changes are disabled in the live demo.")
+        return redirect("accounts:settings")
+
     config, _ = UserLLMConfig.objects.get_or_create(user=request.user)
     password_form = CustomPasswordChangeForm(user=request.user, data=request.POST)
     if password_form.is_valid():
@@ -130,7 +185,86 @@ def password_change_view(request):
 
 
 @login_required
+@require_POST
+def export_vault_view(request):
+    """Exports a password-encrypted vault backup envelope using the user's password."""
+    if _is_demo_user(request.user):
+        messages.warning(request, "Vault export is disabled in the live demo.")
+        return redirect("accounts:settings")
+
+    password = request.POST.get("password", "")
+    if not password or not request.user.check_password(password):
+        messages.error(request, "Incorrect password. Cannot export encrypted vault.")
+        return redirect("accounts:settings")
+
+    from django.http import HttpResponse
+    from django.utils.text import slugify
+
+    from accounts.vault import create_encrypted_vault_payload
+
+    try:
+        envelope = create_encrypted_vault_payload(request.user, password)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("accounts:settings")
+
+    safe_username = slugify(request.user.username) or "user"
+    payload_str = json.dumps(envelope, indent=2)
+    response = HttpResponse(payload_str, content_type="application/json")
+    response["Content-Disposition"] = (
+        f'attachment; filename="prioritysuite_vault_{safe_username}.json"'
+    )
+    return response
+
+
+@login_required
+@require_POST
+def restore_vault_view(request):
+    """Restores user frameworks and decisions from an encrypted vault file."""
+    if _is_demo_user(request.user):
+        messages.warning(request, "Vault restoration is disabled in the live demo.")
+        return redirect("accounts:settings")
+
+    password = request.POST.get("password", "")
+    vault_file = request.FILES.get("vault_file")
+
+    if not password or not vault_file:
+        messages.error(request, "Both the vault file and password are required for restoration.")
+        return redirect("accounts:settings")
+
+    from accounts.vault import MAX_ENCRYPTED_VAULT_BYTES, decrypt_and_restore_vault
+
+    if vault_file.size and vault_file.size > MAX_ENCRYPTED_VAULT_BYTES:
+        messages.error(
+            request,
+            f"Uploaded vault file ({vault_file.size} bytes) exceeds maximum allowed size "
+            f"({MAX_ENCRYPTED_VAULT_BYTES} bytes).",
+        )
+        return redirect("accounts:settings")
+
+    try:
+        content = vault_file.read().decode("utf-8")
+        envelope = json.loads(content)
+        if not isinstance(envelope, dict):
+            raise ValueError("Vault file root structure must be a JSON object.")
+        salt = envelope.get("salt")
+        ciphertext = envelope.get("ciphertext")
+        if not isinstance(salt, str) or not isinstance(ciphertext, str):
+            raise ValueError("Vault file must contain string 'salt' and 'ciphertext' fields.")
+        count = decrypt_and_restore_vault(request.user, envelope, password)
+        messages.success(request, f"Successfully restored {count} framework(s) from vault.")
+    except (ValueError, KeyError, json.JSONDecodeError, AttributeError) as exc:
+        messages.error(request, f"Failed to restore vault: {exc}")
+
+    return redirect("accounts:settings")
+
+
+@login_required
 def delete_account_view(request):
+    if _is_demo_user(request.user):
+        messages.warning(request, "Account deletion is disabled in the live demo.")
+        return redirect("accounts:settings")
+
     if request.method == "POST":
         user = request.user
         logout(request)
@@ -148,6 +282,11 @@ def delete_account_view(request):
 def test_llm_connection_view(request):
     if request.method != "POST":
         return redirect("accounts:settings")
+
+    if _is_demo_user(request.user):
+        messages.warning(request, "External LLM connection testing is disabled in the live demo.")
+        return redirect("accounts:settings")
+
     config = getattr(request.user, "llm_config", None)
 
     if "provider" in request.POST:

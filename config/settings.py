@@ -297,3 +297,8 @@ EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() in ("true", "1"
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", "PrioritySuite <noreply@prioritysuite.local>"
 )
+
+# Demo Mode Configuration (§8.3 & §11.2)
+DEMO_MODE = os.environ.get("DEMO_MODE", "False").lower() in ("true", "1", "yes")
+DEMO_USERNAME = os.environ.get("DEMO_USERNAME", "demo")
+

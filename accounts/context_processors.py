@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from config import __version__
 
 
@@ -10,4 +12,10 @@ def user_preferences(request):
     return {
         "current_theme_preference": theme,
         "app_version": __version__,
+        "demo_mode": getattr(settings, "DEMO_MODE", False),
+        "is_demo_user": (
+            bool(getattr(settings, "DEMO_MODE", False))
+            and request.user.is_authenticated
+            and request.user.username == getattr(settings, "DEMO_USERNAME", "demo")
+        ),
     }

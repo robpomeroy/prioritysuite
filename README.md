@@ -12,6 +12,7 @@
 
 - **Conceptual Model:** Structured around **Domains → Whys → Objectives → Goals** with optional qualitative **Non-Negotiable** markers.
 - **Cross-Domain Decision Assessments:** 7-step guided assessment to explore the ripple effects and tensions of a proposed decision across multiple life areas.
+- **Public Demonstration System (§8.3 & §11.2):** Optional zero-friction demo mode (`DEMO_MODE=True`) with one-click live exploration and scheduled `reset_demo` baseline restoration.
 - **Sample Framework & Onboarding:** One-click option on first use to explore with diverse sample domains and items, easily removable at any time.
 - **Periodic Review:** Filter Whys, Objectives, and Goals by status (`Active`, `Paused`, `Completed`) and record review dates.
 - **Vendor-Neutral LLM Partner (BYOK):** Seamless support for **Ollama** (local/offline) and **OpenRouter** (cloud access to Anthropic, OpenAI, Gemini, etc.) using `litellm`.

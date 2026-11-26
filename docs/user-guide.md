@@ -50,8 +50,6 @@ Real commitments frequently compete across domains for limited hours, energy, an
 ### 4.2 Cross-Domain Decision Assessments
 Real decisions often benefit one area of life while creating strains or opportunity costs in another. The **Decision Assessment** feature provides a structured 7-step exploration:
 
-Real decisions often benefit one area of life while creating strains or opportunity costs in another. The **Decision Assessment** feature provides a structured 7-step exploration:
-
 1. **Proposal / Opportunity:** State what is being considered (e.g. *"A promotion offer involving higher compensation, longer hours, and weekly travel"*).
 2. **Affected Domains & Whys:** Select the domains and core convictions engaged by this opportunity.
 3. **Supporting Priorities:** Identify existing objectives that this proposal advances.
@@ -125,3 +123,28 @@ The interactive export builder allows you to:
 Click the **🍂 Theme** button in the top navigation bar at any time to switch between:
 - **Autumn Parchment (Light):** Warm cream and parchment tones with terracotta and sage accents.
 - **Autumn Woodland (Dark):** Deep woodland charcoal and warm umber tones with copper and amber highlights.
+
+---
+
+## 9. Public Demonstration Mode (§8.3 & §11.2)
+
+When PrioritySuite is deployed as an evaluation instance with demonstration
+mode enabled:
+- **No-Barrier Exploration:** A prominent **"🍂 Explore Live Demo"** button on
+  the sign-in screen logs visitors directly into a fully-configured demo
+  workspace without registration or personal credentials.
+- **Curated Starter Library:** The demo account includes three realistic,
+  pre-seeded frameworks demonstrating varied life situations:
+  1. *Sample Life & Priorities Framework:* Family, work, and personal renewal
+     with a cross-domain Decision Assessment and simulated reflection log.
+  2. *Career & Vocation Transition:* Exploring startup validation, craft
+     autonomy, and financial runway.
+  3. *Independent Creator & Sustainable Pace:* Balancing longform writing,
+     sustainable commercial craft, and screen-free rest.
+- **Demonstration Banner:** An active notice banner at the top of every screen
+  clarifies that you are viewing a public demonstration.
+- **Safety Boundaries:** To protect public evaluation stability, the demo user
+  cannot modify account passwords, edit profile emails, or delete the account.
+- **Periodic Refresh:** The instance automatically resets to a pristine baseline
+  at regular intervals, safely clearing visitor test data.
+

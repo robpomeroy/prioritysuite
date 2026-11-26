@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-24
+
+### Added
+- Automated Public Demonstration System (§8.3 & §11.2):
+  - Added `DEMO_MODE` configuration and single-click "Explore Live Demo" entrypoint
+    on login screen.
+  - Implemented `manage.py reset_demo` management command for scheduled or automated
+    periodic reset of visitor modifications.
+  - Expanded starter framework library with sample Decision Assessments and simulated
+    Thinking Partner LLM reflection logs.
+  - Added curated starter templates: *Career & Vocation Transition* and
+    *Independent Creator & Sustainable Pace*.
+  - Enforced strict demo safety boundaries preventing demo account password modifications,
+    profile updates, or account deletions.
+- Password-Encrypted Vault Backup (§11.2):
+  - Added cryptographic encrypted vault export and restore in user settings.
+  - Password-derived key encryption using PBKDF2-HMAC-SHA256 (600,000 iterations)
+    and Fernet AES-128-CBC cipher.
+  - Portable offline framework and decision archives encrypted with user password.
+
+### Changed
+- Bumped application version to 0.4.0 across project metadata and configuration.
+
 ## [0.3.0] - 2026-11-24
 
 ### Added
