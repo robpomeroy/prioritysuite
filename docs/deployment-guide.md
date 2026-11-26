@@ -136,14 +136,14 @@ Because Django validates the incoming HTTP `Host` header against `ALLOWED_HOSTS`
 
 If deploying to a dedicated Linux server (Ubuntu 22.04/24.04 or AlmaLinux 9/RHEL 9) without Docker:
 
-### 3.1 Install System Dependencies & MariaDB
+### 4.1 Install System Dependencies & MariaDB
 ```bash
 sudo apt update && sudo apt install -y python3-venv python3-dev libmariadb-dev-compat gcc nginx
 # Or on AlmaLinux/RHEL:
 # sudo dnf install -y python3-devel mariadb-devel gcc nginx
 ```
 
-### 3.2 Configure MariaDB Database
+### 4.2 Configure MariaDB Database
 ```sql
 CREATE DATABASE prioritysuite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'prioritysuite'@'localhost' IDENTIFIED BY 'your_strong_password';
@@ -151,7 +151,7 @@ GRANT ALL PRIVILEGES ON prioritysuite.* TO 'prioritysuite'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-### 3.3 Set Up Application & Virtual Environment
+### 4.3 Set Up Application & Virtual Environment
 ```bash
 sudo mkdir -p /var/www/prioritysuite
 sudo chown -R $USER:$USER /var/www/prioritysuite
@@ -167,7 +167,7 @@ python manage.py collectstatic --noinput
 python manage.py migrate
 ```
 
-### 3.4 Configure Gunicorn Systemd Service
+### 4.4 Configure Gunicorn Systemd Service
 Create `/etc/systemd/system/prioritysuite.service`:
 
 ```ini
@@ -196,7 +196,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now prioritysuite
 ```
 
-### 3.5 Configure Nginx Reverse Proxy
+### 4.5 Configure Nginx Reverse Proxy
 Create `/etc/nginx/sites-available/prioritysuite`:
 
 ```nginx
@@ -231,12 +231,12 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-## 4. Public Demonstration Instance Configuration (§8.3 & §11.2)
+## 5. Public Demonstration Instance Configuration (§8.3 & §11.2)
 
 If deploying a public showcase or evaluation server where visitors can test
 PrioritySuite without creating personal accounts:
 
-### 4.1 Enabling Demo Mode in Environment
+### 5.1 Enabling Demo Mode in Environment
 In `/var/www/prioritysuite/.env` (or Docker environment):
 ```bash
 # Enable public demo mode
@@ -251,7 +251,7 @@ When enabled:
 - Security boundaries prevent the demo user from changing passwords, editing
   the email address, or deleting the account.
 
-### 4.2 Automated Periodic Reset via Systemd Timer
+### 5.2 Automated Periodic Reset via Systemd Timer
 To keep the public demo clean and prevent accumulation of test entries or
 inappropriate submissions, configure an automated reset timer:
 
@@ -290,7 +290,7 @@ sudo systemctl enable --now prioritysuite-reset-demo.timer
 sudo systemctl list-timers --all | grep prioritysuite
 ```
 
-### 4.3 Alternative: Periodic Reset via Cron
+### 5.3 Alternative: Periodic Reset via Cron
 Alternatively, add an hourly cron job for the application user (`www-data`).
 Ensure the destination log file exists and is writable by `www-data` (e.g.
 `sudo touch /var/log/prioritysuite-demo-reset.log && sudo chown www-data:www-data /var/log/prioritysuite-demo-reset.log`):
@@ -299,7 +299,7 @@ Ensure the destination log file exists and is writable by `www-data` (e.g.
 0 * * * * cd /var/www/prioritysuite && .venv/bin/python manage.py reset_demo >> /var/log/prioritysuite-demo-reset.log 2>&1
 ```
 
-### 4.4 Docker Compose Demo Reset
+### 5.4 Docker Compose Demo Reset
 In a containerized deployment, run the reset command via cron or container execution:
 ```bash
 docker compose exec web python manage.py reset_demo

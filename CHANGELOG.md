@@ -20,11 +20,11 @@ and this project adheres to
     *Independent Creator & Sustainable Pace*.
   - Enforced strict demo safety boundaries preventing demo account password modifications,
     profile updates, or account deletions.
-- Zero-Knowledge Encrypted Vault (§11.2):
+- Password-Encrypted Vault Backup (§11.2):
   - Added cryptographic encrypted vault export and restore in user settings.
-  - Password-derived key encryption using PBKDF2-HMAC-SHA256 (100,000 iterations)
+  - Password-derived key encryption using PBKDF2-HMAC-SHA256 (600,000 iterations)
     and Fernet AES-128-CBC cipher.
-  - Guarantees zero-knowledge privacy for portable offline framework archives.
+  - Portable offline framework and decision archives encrypted with user password.
 
 ### Changed
 - Bumped application version to 0.4.0 across project metadata and configuration.

@@ -67,7 +67,7 @@ class Command(BaseCommand):
                 demo_user.set_unusable_password()
                 demo_user.save()
 
-            # Ensure demo LLM config is offline/sample
+            # Ensure demo LLM config is offline/sample and wipes any saved API keys
             UserLLMConfig.objects.update_or_create(
                 user=demo_user,
                 defaults={
@@ -75,6 +75,8 @@ class Command(BaseCommand):
                     "model_name": "ollama/llama3.1",
                     "api_base": "http://localhost:11434",
                     "consent_given": False,
+                    "_encrypted_api_key": "",
+                    "theme_preference": "auto",
                 },
             )
 

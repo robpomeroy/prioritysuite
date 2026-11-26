@@ -50,8 +50,6 @@ Real commitments frequently compete across domains for limited hours, energy, an
 ### 4.2 Cross-Domain Decision Assessments
 Real decisions often benefit one area of life while creating strains or opportunity costs in another. The **Decision Assessment** feature provides a structured 7-step exploration:
 
-Real decisions often benefit one area of life while creating strains or opportunity costs in another. The **Decision Assessment** feature provides a structured 7-step exploration:
-
 1. **Proposal / Opportunity:** State what is being considered (e.g. *"A promotion offer involving higher compensation, longer hours, and weekly travel"*).
 2. **Affected Domains & Whys:** Select the domains and core convictions engaged by this opportunity.
 3. **Supporting Priorities:** Identify existing objectives that this proposal advances.

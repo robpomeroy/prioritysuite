@@ -81,7 +81,9 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                             "title": w.title,
                             "description": w.description,
                             "is_non_negotiable": w.is_non_negotiable,
+                            "is_sample": w.is_sample,
                             "display_order": w.display_order,
+                            "created_at": (w.created_at.isoformat() if w.created_at else None),
                             "last_reviewed_at": (
                                 w.last_reviewed_at.isoformat() if w.last_reviewed_at else None
                             ),
@@ -100,9 +102,8 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                             "title": obj.title,
                             "description": obj.description,
                             "status": obj.status,
-                            "created_at": (
-                                obj.created_at.isoformat() if obj.created_at else None
-                            ),
+                            "is_sample": obj.is_sample,
+                            "created_at": (obj.created_at.isoformat() if obj.created_at else None),
                             "whys": [w.title for w in obj.whys.all()],
                             "why_ids": [str(w.id) for w in obj.whys.all()],
                             "related_domains": [rd.name for rd in valid_related_domains],
@@ -124,6 +125,7 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                             "title": g.title,
                             "description": g.description,
                             "status": g.status,
+                            "is_sample": g.is_sample,
                             "created_at": g.created_at.isoformat() if g.created_at else None,
                             "target_date": g.target_date.isoformat() if g.target_date else None,
                             "objectives": [o.title for o in g.objectives.all()],
@@ -142,6 +144,8 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                         "name": d.name,
                         "description": d.description,
                         "display_order": d.display_order,
+                        "is_sample": d.is_sample,
+                        "created_at": d.created_at.isoformat() if d.created_at else None,
                         "whys": whys_list,
                         "objectives": objectives_list,
                         "goals": goals_list,
@@ -341,8 +345,8 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
     for fw_data in frameworks_data:
         fw = Framework.objects.create(
             owner=user,
-            name=fw_data.get("name", "Restored Framework"),
-            description=fw_data.get("description", ""),
+            name=str(fw_data.get("name") or "Restored Framework"),
+            description=str(fw_data.get("description") or ""),
             is_sample=bool(fw_data.get("is_sample", False)),
         )
         restored_count += 1
@@ -364,10 +368,17 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
         for d_data in fw_data.get("domains", []):
             dom = Domain.objects.create(
                 framework=fw,
-                name=d_data.get("name", "Domain"),
-                description=d_data.get("description", ""),
-                display_order=d_data.get("display_order", 0),
+                name=d_data.get("name") or "Domain",
+                description=d_data.get("description") or "",
+                display_order=max(0, int(d_data.get("display_order") or 0)),
+                is_sample=bool(d_data.get("is_sample", False)),
             )
+            raw_dom_created_at = d_data.get("created_at")
+            if raw_dom_created_at:
+                dt = parse_datetime(raw_dom_created_at)
+                if dt:
+                    Domain.objects.filter(id=dom.id).update(created_at=dt)
+
             d_export_id = d_data.get("export_id")
             if d_export_id:
                 domains_by_id[str(d_export_id)] = dom
@@ -376,12 +387,19 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
             for w_data in d_data.get("whys", []):
                 why = Why.objects.create(
                     domain=dom,
-                    title=w_data.get("title", "Why"),
-                    description=w_data.get("description", ""),
-                    is_non_negotiable=w_data.get("is_non_negotiable", False),
-                    display_order=w_data.get("display_order", 0),
-                    last_reviewed_at=w_data.get("last_reviewed_at"),
+                    title=w_data.get("title") or "Why",
+                    description=w_data.get("description") or "",
+                    is_non_negotiable=bool(w_data.get("is_non_negotiable", False)),
+                    is_sample=bool(w_data.get("is_sample", False)),
+                    display_order=max(0, int(w_data.get("display_order") or 0)),
+                    last_reviewed_at=w_data.get("last_reviewed_at") or None,
                 )
+                raw_why_created_at = w_data.get("created_at")
+                if raw_why_created_at:
+                    dt = parse_datetime(raw_why_created_at)
+                    if dt:
+                        Why.objects.filter(id=why.id).update(created_at=dt)
+
                 w_export_id = w_data.get("export_id")
                 if w_export_id:
                     whys_by_id[str(w_export_id)] = why
@@ -400,10 +418,11 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
             for o_data in d_data.get("objectives", []):
                 obj = Objective.objects.create(
                     primary_domain=dom,
-                    title=o_data.get("title", "Objective"),
-                    description=o_data.get("description", ""),
-                    status=o_data.get("status", StatusChoices.ACTIVE),
-                    last_reviewed_at=o_data.get("last_reviewed_at"),
+                    title=o_data.get("title") or "Objective",
+                    description=o_data.get("description") or "",
+                    status=o_data.get("status") or StatusChoices.ACTIVE,
+                    is_sample=bool(o_data.get("is_sample", False)),
+                    last_reviewed_at=o_data.get("last_reviewed_at") or None,
                 )
                 raw_obj_created_at = o_data.get("created_at")
                 if raw_obj_created_at:
@@ -425,8 +444,8 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                             linked_whys.append(whys_by_id[str(wid)])
                 else:
                     for w_title in o_data.get("whys", []):
-                        if w_title in whys_by_title:
-                            linked_whys.append(whys_by_title[w_title])
+                        if isinstance(w_title, (str, int)) and str(w_title) in whys_by_title:
+                            linked_whys.append(whys_by_title[str(w_title)])
                 if linked_whys:
                     obj.whys.add(*linked_whys)
 
@@ -440,8 +459,8 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                             linked_domains.append(domains_by_id[str(did)])
                 else:
                     for rd_name in o_data.get("related_domains", []):
-                        if rd_name in domains_by_name:
-                            linked_domains.append(domains_by_name[rd_name])
+                        if isinstance(rd_name, (str, int)) and str(rd_name) in domains_by_name:
+                            linked_domains.append(domains_by_name[str(rd_name)])
                 if linked_domains:
                     obj.related_domains.add(*linked_domains)
 
@@ -458,11 +477,12 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
             for g_data in d_data.get("goals", []):
                 goal = Goal.objects.create(
                     primary_domain=dom,
-                    title=g_data.get("title", "Goal"),
-                    description=g_data.get("description", ""),
-                    status=g_data.get("status", StatusChoices.ACTIVE),
-                    target_date=g_data.get("target_date"),
-                    last_reviewed_at=g_data.get("last_reviewed_at"),
+                    title=g_data.get("title") or "Goal",
+                    description=g_data.get("description") or "",
+                    status=g_data.get("status") or StatusChoices.ACTIVE,
+                    is_sample=bool(g_data.get("is_sample", False)),
+                    target_date=g_data.get("target_date") or None,
+                    last_reviewed_at=g_data.get("last_reviewed_at") or None,
                 )
                 raw_goal_created_at = g_data.get("created_at")
                 if raw_goal_created_at:
@@ -478,8 +498,8 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                             linked_objs.append(objectives_by_id[str(oid)])
                 else:
                     for o_title in g_data.get("objectives", []):
-                        if o_title in objectives_by_title:
-                            linked_objs.append(objectives_by_title[o_title])
+                        if isinstance(o_title, (str, int)) and str(o_title) in objectives_by_title:
+                            linked_objs.append(objectives_by_title[str(o_title)])
                 if linked_objs:
                     goal.objectives.add(*linked_objs)
 
@@ -491,8 +511,8 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                             linked_rds.append(domains_by_id[str(did)])
                 else:
                     for rd_name in g_data.get("related_domains", []):
-                        if rd_name in domains_by_name:
-                            linked_rds.append(domains_by_name[rd_name])
+                        if isinstance(rd_name, (str, int)) and str(rd_name) in domains_by_name:
+                            linked_rds.append(domains_by_name[str(rd_name)])
                 if linked_rds:
                     goal.related_domains.add(*linked_rds)
 
@@ -502,13 +522,13 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
         for dec_data in fw_data.get("decisions", []):
             dec = DecisionRecord.objects.create(
                 framework=fw,
-                title=dec_data.get("title", "Decision"),
-                proposal_description=dec_data.get("proposal_description", ""),
-                benefits_and_costs=dec_data.get("benefits_and_costs", ""),
-                alternatives_considered=dec_data.get("alternatives_considered", ""),
-                unresolved_questions=dec_data.get("unresolved_questions", ""),
-                decision_outcome=dec_data.get("decision_outcome", ""),
-                status=dec_data.get("status", "EXPLORING"),
+                title=dec_data.get("title") or "Decision",
+                proposal_description=dec_data.get("proposal_description") or "",
+                benefits_and_costs=dec_data.get("benefits_and_costs") or "",
+                alternatives_considered=dec_data.get("alternatives_considered") or "",
+                unresolved_questions=dec_data.get("unresolved_questions") or "",
+                decision_outcome=dec_data.get("decision_outcome") or "",
+                status=dec_data.get("status") or "EXPLORING",
             )
             dec_export_id = dec_data.get("export_id")
             if dec_export_id:
@@ -531,8 +551,8 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                         aff_domains.append(domains_by_id[str(did)])
             else:
                 for ad_name in dec_data.get("affected_domains", []):
-                    if ad_name in domains_by_name:
-                        aff_domains.append(domains_by_name[ad_name])
+                    if isinstance(ad_name, (str, int)) and str(ad_name) in domains_by_name:
+                        aff_domains.append(domains_by_name[str(ad_name)])
             if aff_domains:
                 dec.affected_domains.add(*aff_domains)
 
@@ -545,8 +565,8 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                         rel_whys.append(whys_by_id[str(wid)])
             else:
                 for rw_title in dec_data.get("relevant_whys", []):
-                    if rw_title in whys_by_title:
-                        rel_whys.append(whys_by_title[rw_title])
+                    if isinstance(rw_title, (str, int)) and str(rw_title) in whys_by_title:
+                        rel_whys.append(whys_by_title[str(rw_title)])
             if rel_whys:
                 dec.relevant_whys.add(*rel_whys)
 
@@ -559,8 +579,11 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                         supp_objs.append(objectives_by_id[str(oid)])
             else:
                 for so_title in dec_data.get("supporting_objectives", []):
-                    if so_title in objectives_by_title:
-                        supp_objs.append(objectives_by_title[so_title])
+                    if (
+                        isinstance(so_title, (str, int))
+                        and str(so_title) in objectives_by_title
+                    ):
+                        supp_objs.append(objectives_by_title[str(so_title)])
             if supp_objs:
                 dec.supporting_objectives.add(*supp_objs)
 
@@ -573,8 +596,11 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                         conf_objs.append(objectives_by_id[str(oid)])
             else:
                 for co_title in dec_data.get("conflicting_objectives", []):
-                    if co_title in objectives_by_title:
-                        conf_objs.append(objectives_by_title[co_title])
+                    if (
+                        isinstance(co_title, (str, int))
+                        and str(co_title) in objectives_by_title
+                    ):
+                        conf_objs.append(objectives_by_title[str(co_title)])
             if conf_objs:
                 dec.conflicting_objectives.add(*conf_objs)
 
@@ -584,15 +610,17 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
             if ref_data.get("decision_id"):
                 parent_dec = decisions_by_id.get(str(ref_data["decision_id"]))
             if not parent_dec and ref_data.get("decision_title"):
-                parent_dec = decisions_by_title.get(ref_data["decision_title"])
+                dec_title = ref_data["decision_title"]
+                if isinstance(dec_title, (str, int)):
+                    parent_dec = decisions_by_title.get(str(dec_title))
 
             ref_log = LLMReflectionLog.objects.create(
                 framework=fw,
                 decision=parent_dec,
-                user_prompt=ref_data.get("user_prompt", ""),
-                context_snapshot=ref_data.get("context_snapshot", ""),
-                llm_response=ref_data.get("llm_response", ""),
-                provider_used=ref_data.get("provider_used", "Unknown"),
+                user_prompt=ref_data.get("user_prompt") or "",
+                context_snapshot=ref_data.get("context_snapshot") or "",
+                llm_response=ref_data.get("llm_response") or "",
+                provider_used=ref_data.get("provider_used") or "Unknown",
             )
             exported_created_at = ref_data.get("created_at")
             if exported_created_at:
@@ -605,18 +633,48 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
 
 def decrypt_and_restore_vault(user: User, vault_envelope: dict[str, Any], password: str) -> int:
     """Decrypts a vault envelope using the supplied password and restores data."""
+    if not isinstance(vault_envelope, dict):
+        raise ValueError("Invalid vault envelope: root must be a JSON dictionary.")
+
+    if vault_envelope.get("format") != "prioritysuite-encrypted-vault-v1":
+        raise ValueError("Unsupported vault format version.")
+    if vault_envelope.get("kdf") != "PBKDF2-HMAC-SHA256":
+        raise ValueError("Unsupported key derivation function.")
+
     salt_b64 = vault_envelope.get("salt")
     ciphertext = vault_envelope.get("ciphertext")
-    if not salt_b64 or not ciphertext:
-        raise ValueError("Invalid vault envelope: missing salt or ciphertext.")
+    if (
+        not isinstance(salt_b64, str)
+        or not isinstance(ciphertext, str)
+        or not salt_b64
+        or not ciphertext
+    ):
+        raise ValueError("Invalid vault envelope: missing or invalid salt or ciphertext.")
+
+    if len(ciphertext) > MAX_ENCRYPTED_VAULT_BYTES:
+        raise ValueError(
+            f"Vault ciphertext size ({len(ciphertext)} bytes) exceeds maximum allowed size "
+            f"({MAX_ENCRYPTED_VAULT_BYTES} bytes)."
+        )
 
     iterations = vault_envelope.get("iterations", DEFAULT_PBKDF2_ITERATIONS)
-    if not isinstance(iterations, int) or iterations not in ALLOWED_PBKDF2_ITERATIONS:
+    if (
+        isinstance(iterations, bool)
+        or not isinstance(iterations, int)
+        or iterations not in ALLOWED_PBKDF2_ITERATIONS
+    ):
         raise ValueError(
             f"Unsupported or unauthorized PBKDF2 iteration count in vault envelope: {iterations}"
         )
 
-    salt = base64.b64decode(salt_b64.encode("utf-8"))
+    try:
+        salt = base64.b64decode(salt_b64.encode("utf-8"), validate=True)
+    except Exception as err:
+        raise ValueError(f"Invalid salt in vault envelope: {err}") from err
+
+    if not (16 <= len(salt) <= 64):
+        raise ValueError(f"Invalid salt length in vault envelope ({len(salt)} bytes).")
+
     key = derive_vault_key(password, salt, iterations=iterations)
     cipher = Fernet(key)
 
@@ -632,5 +690,13 @@ def decrypt_and_restore_vault(user: User, vault_envelope: dict[str, Any], passwo
     except Exception as err:
         raise ValueError(f"Vault data corrupted or invalid format: {err}") from err
 
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from django.db import DatabaseError
+
     with transaction.atomic():
-        return restore_user_data_from_dict(user, data)
+        try:
+            return restore_user_data_from_dict(user, data)
+        except (DjangoValidationError, DatabaseError, TypeError) as err:
+            raise ValueError(
+                f"Vault data contains invalid or corrupted field values: {err}"
+            ) from err

@@ -93,6 +93,10 @@ def demo_login_view(request):
 def settings_view(request):
     config, _ = UserLLMConfig.objects.get_or_create(user=request.user)
     if request.method == "POST":
+        if _is_demo_user(request.user):
+            messages.warning(request, "LLM configuration cannot be modified in the live demo.")
+            return redirect("accounts:settings")
+
         old_provider = config.provider
         old_api_base = (config.api_base or "").strip()
         form = UserLLMConfigForm(request.POST, instance=config)
@@ -184,20 +188,31 @@ def password_change_view(request):
 @require_POST
 def export_vault_view(request):
     """Exports a password-encrypted vault backup envelope using the user's password."""
+    if _is_demo_user(request.user):
+        messages.warning(request, "Vault export is disabled in the live demo.")
+        return redirect("accounts:settings")
+
     password = request.POST.get("password", "")
     if not password or not request.user.check_password(password):
         messages.error(request, "Incorrect password. Cannot export encrypted vault.")
         return redirect("accounts:settings")
 
     from django.http import HttpResponse
+    from django.utils.text import slugify
 
     from accounts.vault import create_encrypted_vault_payload
 
-    envelope = create_encrypted_vault_payload(request.user, password)
+    try:
+        envelope = create_encrypted_vault_payload(request.user, password)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("accounts:settings")
+
+    safe_username = slugify(request.user.username) or "user"
     payload_str = json.dumps(envelope, indent=2)
     response = HttpResponse(payload_str, content_type="application/json")
     response["Content-Disposition"] = (
-        f'attachment; filename="prioritysuite_vault_{request.user.username}.json"'
+        f'attachment; filename="prioritysuite_vault_{safe_username}.json"'
     )
     return response
 
@@ -217,7 +232,15 @@ def restore_vault_view(request):
         messages.error(request, "Both the vault file and password are required for restoration.")
         return redirect("accounts:settings")
 
-    from accounts.vault import decrypt_and_restore_vault
+    from accounts.vault import MAX_ENCRYPTED_VAULT_BYTES, decrypt_and_restore_vault
+
+    if vault_file.size and vault_file.size > MAX_ENCRYPTED_VAULT_BYTES:
+        messages.error(
+            request,
+            f"Uploaded vault file ({vault_file.size} bytes) exceeds maximum allowed size "
+            f"({MAX_ENCRYPTED_VAULT_BYTES} bytes).",
+        )
+        return redirect("accounts:settings")
 
     try:
         content = vault_file.read().decode("utf-8")
@@ -259,6 +282,11 @@ def delete_account_view(request):
 def test_llm_connection_view(request):
     if request.method != "POST":
         return redirect("accounts:settings")
+
+    if _is_demo_user(request.user):
+        messages.warning(request, "External LLM connection testing is disabled in the live demo.")
+        return redirect("accounts:settings")
+
     config = getattr(request.user, "llm_config", None)
 
     if "provider" in request.POST:

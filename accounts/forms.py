@@ -269,6 +269,13 @@ class UserRegistrationForm(UniqueEmailMixin, forms.ModelForm):
             ),
         }
 
+    def clean_username(self):
+        username = (self.cleaned_data.get("username") or "").strip()
+        demo_username = getattr(settings, "DEMO_USERNAME", "demo")
+        if getattr(settings, "DEMO_MODE", False) and username.lower() == demo_username.lower():
+            raise ValidationError("This username is reserved for the demonstration account.")
+        return username
+
     def clean_email(self):
         email = super().clean_email()
         if not email:
