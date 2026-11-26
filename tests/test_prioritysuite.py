@@ -2955,7 +2955,7 @@ def test_version_display(client, user):
     resp = client.get("/accounts/settings/")
     assert resp.status_code == 200
     content = resp.content.decode()
-    assert "PrioritySuite v0.4.0" in content
+    assert "PrioritySuite v0.5.0" in content
 
 
 def test_registration_form_case_insensitive_duplicate_email(db):
@@ -3830,3 +3830,172 @@ def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
     assert leg_dec.conflicting_objectives.count() == 1
     assert leg_fw.reflections.count() == 1
     assert leg_fw.reflections.first().decision == leg_dec
+
+
+def test_v050_framework_templates_library(client, user):
+    """Test browsing and applying predefined life framework templates."""
+    client.force_login(user)
+    resp = client.get("/frameworks/templates/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "Predefined Life Framework Library" in content
+    assert "Balanced Life &amp; Priorities" in content
+    assert "Career &amp; Vocation Transition" in content
+    assert "Independent Creator &amp; Sustainable Pace" in content
+    assert "Parenting &amp; Family Stewardship" in content
+    assert "Academic Research &amp; Deep Work" in content
+    assert "Civic Engagement &amp; Community" in content
+
+    # Apply template as sample
+    resp_apply_sample = client.post(
+        "/frameworks/templates/apply/academic_deep_work/",
+        {"as_sample": "true"},
+    )
+    assert resp_apply_sample.status_code == 302
+    fw_sample = Framework.objects.get(owner=user, name="Academic Research & Deep Work")
+    assert fw_sample.is_sample is True
+    assert fw_sample.domains.count() == 2
+
+    # Apply template as personal framework (not sample)
+    resp_apply_live = client.post(
+        "/frameworks/templates/apply/civic_stewardship/",
+        {"as_sample": "false"},
+    )
+    assert resp_apply_live.status_code == 302
+    fw_live = Framework.objects.get(owner=user, name="Civic Engagement & Community Stewardship")
+    assert fw_live.is_sample is False
+    assert fw_live.domains.count() == 2
+
+    # Unknown slug fails gracefully
+    resp_bad_slug = client.post(
+        "/frameworks/templates/apply/non_existent_slug/",
+        {"as_sample": "false"},
+    )
+    assert resp_bad_slug.status_code == 302
+
+
+def test_v050_relationship_map_and_diagnostics(client, user):
+    """Test interactive visual map data and alignment diagnostics."""
+    client.force_login(user)
+    from frameworks.services import seed_sample_framework
+    from frameworks.visualization import build_framework_graph
+
+    fw = seed_sample_framework(user, as_sample=False)
+    graph = build_framework_graph(fw)
+    assert graph["domain_count"] == 3
+    assert len(graph["nodes"]) > 0
+    assert len(graph["edges"]) > 0
+    assert "diagnostics" in graph
+    assert len(graph["decisions"]) == 1
+
+    resp = client.get(f"/frameworks/framework/{fw.id}/map/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "Relationship Map" in content
+    assert "Unanchored Goals" in content
+    assert "Priority Flow Canvas" in content
+
+
+def test_v050_historical_snapshots_and_comparison(client, user):
+    """Test capturing snapshots, diffing evolution, and vault backup of snapshots."""
+    client.force_login(user)
+    from frameworks.models import FrameworkSnapshot, StatusChoices
+    from frameworks.services import seed_sample_framework
+
+    fw = seed_sample_framework(user, as_sample=False)
+
+    # 1. Capture snapshot
+    resp_create = client.post(
+        f"/frameworks/framework/{fw.id}/history/create/",
+        {
+            "title": "Baseline 2026 Snapshot",
+            "notes": "Testing snapshot creation and diffing.",
+        },
+    )
+    assert resp_create.status_code == 302
+    assert fw.snapshots.count() == 1
+    snap = fw.snapshots.first()
+    assert snap.title == "Baseline 2026 Snapshot"
+    assert str(snap) == f"Baseline 2026 Snapshot ({snap.created_at.strftime('%Y-%m-%d')})"
+
+    # 2. View snapshot list
+    resp_list = client.get(f"/frameworks/framework/{fw.id}/history/")
+    assert resp_list.status_code == 200
+    assert "Baseline 2026 Snapshot" in resp_list.content.decode()
+
+    # 3. Mutate live framework (add objective, change goal status)
+    dom = fw.domains.first()
+    dom.primary_objectives.create(
+        title="Newly Added Objective in Live",
+        status=StatusChoices.ACTIVE,
+    )
+    goal = dom.primary_goals.first()
+    goal.status = StatusChoices.COMPLETED
+    goal.save()
+
+    # 4. Compare snapshot vs live
+    resp_compare = client.get(f"/frameworks/framework/{fw.id}/history/{snap.id}/")
+    assert resp_compare.status_code == 200
+    compare_content = resp_compare.content.decode()
+    assert "Snapshot Comparison" in compare_content
+    assert "Newly Added Objective in Live" in compare_content
+    assert "Transitioned from" in compare_content
+
+    # 5. Vault serialization and restore preserves snapshots
+    from accounts.vault import (
+        create_encrypted_vault_payload,
+        decrypt_and_restore_vault,
+    )
+
+    vault_payload = create_encrypted_vault_payload(user, "password123")
+    new_user = User.objects.create_user(username="snap_user", password="my_vault_password")
+    restored_count = decrypt_and_restore_vault(new_user, vault_payload, "password123")
+    assert restored_count >= 1
+    restored_fw = Framework.objects.get(owner=new_user, name=fw.name)
+    assert restored_fw.snapshots.count() == 1
+    restored_snap = restored_fw.snapshots.first()
+    assert restored_snap.title == "Baseline 2026 Snapshot"
+    assert restored_snap.notes == "Testing snapshot creation and diffing."
+    assert "domains" in restored_snap.snapshot_data
+
+    # 6. Delete snapshot
+    resp_del = client.post(f"/frameworks/history/{snap.id}/delete/")
+    assert resp_del.status_code == 302
+    assert FrameworkSnapshot.objects.filter(id=snap.id).count() == 0
+
+    # 7. Comparison diff engine edge cases (removed/added domain, whys, decisions)
+    from frameworks.comparison import compare_framework_states
+
+    state_old = {
+        "domains": [
+            {
+                "name": "Old Domain",
+                "whys": [{"title": "Old Why"}],
+                "objectives": [{"title": "Old Obj", "status": "ACTIVE"}],
+                "goals": [{"title": "Old Goal", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [{"title": "Old Dec", "status": "EXPLORING"}],
+    }
+    state_new = {
+        "domains": [
+            {
+                "name": "New Domain",
+                "whys": [{"title": "New Why"}],
+                "objectives": [{"title": "New Obj", "status": "COMPLETED"}],
+                "goals": [{"title": "New Goal", "status": "COMPLETED"}],
+            }
+        ],
+        "decisions": [{"title": "New Dec", "status": "DECIDED"}],
+    }
+    diff_edge = compare_framework_states(state_old, state_new)
+    assert len(diff_edge["added_domains"]) == 1
+    assert len(diff_edge["removed_domains"]) == 1
+    assert len(diff_edge["added_whys"]) == 1
+    assert len(diff_edge["removed_whys"]) == 1
+    assert len(diff_edge["added_objectives"]) == 1
+    assert len(diff_edge["removed_objectives"]) == 1
+    assert len(diff_edge["added_goals"]) == 1
+    assert len(diff_edge["removed_goals"]) == 1
+    assert len(diff_edge["added_decisions"]) == 1
+    assert len(diff_edge["removed_decisions"]) == 1

@@ -1,8 +1,11 @@
+from collections.abc import Callable
+from typing import Any
+
 from decisions.models import DecisionRecord, DecisionStatus, LLMReflectionLog
 from frameworks.models import Domain, Framework, Goal, Objective, StatusChoices, Why
 
 
-def seed_sample_framework(user) -> Framework:
+def seed_sample_framework(user, as_sample: bool = True) -> Framework:
     """Populates an illustrative sample framework clearly flagged with is_sample=True."""
     framework = Framework.objects.create(
         owner=user,
@@ -10,7 +13,7 @@ def seed_sample_framework(user) -> Framework:
         description=(
             "Illustrative starter framework demonstrating Domains, Whys, Objectives, and Goals."
         ),
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     # Domain 1: Family and Home
@@ -21,7 +24,7 @@ def seed_sample_framework(user) -> Framework:
             "Broad sphere covering domestic stability, relationships, and caring responsibilities."
         ),
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
     why_family_1 = Why.objects.create(
         domain=family,
@@ -29,7 +32,7 @@ def seed_sample_framework(user) -> Framework:
         description="Core conviction that loved ones need warmth, emotional presence, and safety.",
         is_non_negotiable=True,
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
     why_family_2 = Why.objects.create(
         domain=family,
@@ -37,7 +40,7 @@ def seed_sample_framework(user) -> Framework:
         description="Ensuring career or side interests do not crowd out unhurried time together.",
         is_non_negotiable=False,
         display_order=2,
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     # Domain 2: Work and Vocation
@@ -46,7 +49,7 @@ def seed_sample_framework(user) -> Framework:
         name="Work and Vocation",
         description="Professional contribution, skills development, and financial stewardship.",
         display_order=2,
-        is_sample=True,
+        is_sample=as_sample,
     )
     Why.objects.create(
         domain=work,
@@ -54,7 +57,7 @@ def seed_sample_framework(user) -> Framework:
         description="Finding meaning in craft, integrity, and serving real human needs.",
         is_non_negotiable=False,
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
     why_work_2 = Why.objects.create(
         domain=work,
@@ -62,7 +65,7 @@ def seed_sample_framework(user) -> Framework:
         description="Earning reliably to meet responsibilities without reckless overcommitment.",
         is_non_negotiable=True,
         display_order=2,
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     # Domain 3: Personal Health and Well-being
@@ -71,7 +74,7 @@ def seed_sample_framework(user) -> Framework:
         name="Personal Health and Well-being",
         description="Physical endurance, mental clarity, rest, and renewal.",
         display_order=3,
-        is_sample=True,
+        is_sample=as_sample,
     )
     why_health = Why.objects.create(
         domain=health,
@@ -79,7 +82,7 @@ def seed_sample_framework(user) -> Framework:
         description="Recognizing that energy and health are foundations for everything else.",
         is_non_negotiable=False,
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     # Objectives
@@ -88,7 +91,7 @@ def seed_sample_framework(user) -> Framework:
         title="Build financial resilience and a stable home environment.",
         description="Create margin against unexpected crises or downturns.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     obj_financial.whys.add(why_family_1, why_work_2)
     obj_financial.related_domains.add(family)
@@ -98,7 +101,7 @@ def seed_sample_framework(user) -> Framework:
         title="Protect consistent, unhurried time with family each week.",
         description="Maintain clear boundaries between work hours and home life.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     obj_family_time.whys.add(why_family_2)
     obj_family_time.related_domains.add(work)
@@ -108,7 +111,7 @@ def seed_sample_framework(user) -> Framework:
         title="Sustain cardiovascular fitness and regular rest cycles.",
         description="Maintain energy levels through routine movement and decent sleep.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     obj_fitness.whys.add(why_health)
 
@@ -118,7 +121,7 @@ def seed_sample_framework(user) -> Framework:
         title="Establish an emergency buffer of £10,000 over two years.",
         description="Save regularly into a high-yield liquid account.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     goal_fund.objectives.add(obj_financial)
     goal_fund.related_domains.add(family)
@@ -128,7 +131,7 @@ def seed_sample_framework(user) -> Framework:
         title="Protect two work-free evenings each week for dinner and connection.",
         description="Close laptop by 6:00pm on Tuesdays and Thursdays.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     goal_evenings.objectives.add(obj_family_time)
     goal_evenings.related_domains.add(work)
@@ -188,7 +191,7 @@ def seed_sample_framework(user) -> Framework:
     return framework
 
 
-def seed_career_transition_framework(user) -> Framework:
+def seed_career_transition_framework(user, as_sample: bool = True) -> Framework:
     """Starter template: Career & Vocation Transition."""
     framework = Framework.objects.create(
         owner=user,
@@ -197,7 +200,7 @@ def seed_career_transition_framework(user) -> Framework:
             "Framework designed for exploring new professional directions, startup ventures, "
             "or sabbatical planning."
         ),
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     domain_craft = Domain.objects.create(
@@ -205,7 +208,7 @@ def seed_career_transition_framework(user) -> Framework:
         name="Creative Craft & Autonomy",
         description="Deep work, autonomy in problem selection, and mastery.",
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
     why_craft = Why.objects.create(
         domain=domain_craft,
@@ -213,7 +216,7 @@ def seed_career_transition_framework(user) -> Framework:
         description="Avoiding bureaucratic overhead in favor of direct creative impact.",
         is_non_negotiable=True,
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     domain_finances = Domain.objects.create(
@@ -221,7 +224,7 @@ def seed_career_transition_framework(user) -> Framework:
         name="Runway & Financial Freedom",
         description="Maintaining financial independence during times of uncertainty.",
         display_order=2,
-        is_sample=True,
+        is_sample=as_sample,
     )
     why_finances = Why.objects.create(
         domain=domain_finances,
@@ -229,7 +232,7 @@ def seed_career_transition_framework(user) -> Framework:
         description="Preventing financial panic from forcing compromises on integrity.",
         is_non_negotiable=True,
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     obj_mvp = Objective.objects.create(
@@ -237,7 +240,7 @@ def seed_career_transition_framework(user) -> Framework:
         title="Validate prototype product with 50 paying customers.",
         description="Prove commercial and practical utility before leaving stable employment.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     obj_mvp.whys.add(why_craft, why_finances)
 
@@ -246,12 +249,12 @@ def seed_career_transition_framework(user) -> Framework:
         title="Launch closed beta of product within 90 days.",
         description="Interview 10 target users weekly.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     return framework
 
 
-def seed_creator_framework(user) -> Framework:
+def seed_creator_framework(user, as_sample: bool = True) -> Framework:
     """Starter template: Independent Creator & Sustainable Pace."""
     framework = Framework.objects.create(
         owner=user,
@@ -259,7 +262,7 @@ def seed_creator_framework(user) -> Framework:
         description=(
             "Balancing creative output, personal rest, and sustainable commercial operations."
         ),
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     domain_work = Domain.objects.create(
@@ -267,7 +270,7 @@ def seed_creator_framework(user) -> Framework:
         name="Publication & Expression",
         description="Consistent writing, research, and independent publishing.",
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
     why_work = Why.objects.create(
         domain=domain_work,
@@ -275,7 +278,7 @@ def seed_creator_framework(user) -> Framework:
         description="Writing without chasing sensationalism or algorithm changes.",
         is_non_negotiable=True,
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     domain_rest = Domain.objects.create(
@@ -283,7 +286,7 @@ def seed_creator_framework(user) -> Framework:
         name="Sabbath & Regeneration",
         description="Protecting weekly rest, quiet reading, and digital detours.",
         display_order=2,
-        is_sample=True,
+        is_sample=as_sample,
     )
     why_rest = Why.objects.create(
         domain=domain_rest,
@@ -291,7 +294,7 @@ def seed_creator_framework(user) -> Framework:
         description="Recognizing that insight requires spacious thinking time.",
         is_non_negotiable=True,
         display_order=1,
-        is_sample=True,
+        is_sample=as_sample,
     )
 
     obj_essays = Objective.objects.create(
@@ -299,7 +302,7 @@ def seed_creator_framework(user) -> Framework:
         title="Publish 12 high-depth longform essays per year.",
         description="Focus on timeless clarity rather than weekly commentary.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     obj_essays.whys.add(why_work, why_rest)
     obj_essays.related_domains.add(domain_rest)
@@ -309,9 +312,289 @@ def seed_creator_framework(user) -> Framework:
         title="Take every Sunday entirely offline with zero screens.",
         description="Dedicate the day to walks, books, and family conversation.",
         status=StatusChoices.ACTIVE,
-        is_sample=True,
+        is_sample=as_sample,
     )
     return framework
+
+
+def seed_caregiving_framework(user, as_sample: bool = True) -> Framework:
+    """Starter template: Parenting, Caregiving & Multi-Generational Support."""
+    framework = Framework.objects.create(
+        owner=user,
+        name="Parenting, Caregiving & Family Stewardship",
+        description=(
+            "Navigating dependent care, aging parents, domestic rhythms, and personal renewal."
+        ),
+        is_sample=as_sample,
+    )
+
+    domain_care = Domain.objects.create(
+        framework=framework,
+        name="Family & Dependent Care",
+        description="Support for children and aging parents with compassion and presence.",
+        display_order=1,
+        is_sample=as_sample,
+    )
+    why_presence = Why.objects.create(
+        domain=domain_care,
+        title="To offer reliable presence and dignity to family in seasons of dependence.",
+        description="Caring is a privilege and fundamental duty, not an interruption.",
+        is_non_negotiable=True,
+        display_order=1,
+        is_sample=as_sample,
+    )
+
+    domain_renewal = Domain.objects.create(
+        framework=framework,
+        name="Caregiver Health & Renewal",
+        description="Sustaining the emotional, mental, and physical endurance required to care.",
+        display_order=2,
+        is_sample=as_sample,
+    )
+    why_renewal = Why.objects.create(
+        domain=domain_renewal,
+        title="To steward my own health so I can continue to care sustainably.",
+        description="You cannot pour from an empty vessel; self-care is stewardship.",
+        is_non_negotiable=True,
+        display_order=1,
+        is_sample=as_sample,
+    )
+
+    obj_support = Objective.objects.create(
+        primary_domain=domain_care,
+        title="Establish clear weekly routines for medical visits and family respite.",
+        description="Distribute responsibilities and maintain margin for unexpected needs.",
+        status=StatusChoices.ACTIVE,
+        is_sample=as_sample,
+    )
+    obj_support.whys.add(why_presence, why_renewal)
+    obj_support.related_domains.add(domain_renewal)
+
+    Goal.objects.create(
+        primary_domain=domain_renewal,
+        title="Secure 4 hours of uninterrupted personal recharge time each weekend.",
+        description="Coordinate caregiving handoff with partner or family network.",
+        status=StatusChoices.ACTIVE,
+        is_sample=as_sample,
+    )
+    return framework
+
+
+def seed_academic_deep_work_framework(user, as_sample: bool = True) -> Framework:
+    """Starter template: Academic Research, Study & Deep Work."""
+    framework = Framework.objects.create(
+        owner=user,
+        name="Academic Research & Deep Work",
+        description=(
+            "Guiding scholarly investigation, thesis writing, teaching, and mental clarity."
+        ),
+        is_sample=as_sample,
+    )
+
+    domain_scholarship = Domain.objects.create(
+        framework=framework,
+        name="Scholarly Rigor & Contribution",
+        description="Primary research, critical writing, peer collaboration, and discovery.",
+        display_order=1,
+        is_sample=as_sample,
+    )
+    why_scholarship = Why.objects.create(
+        domain=domain_scholarship,
+        title="To pursue honest inquiry and deepen collective understanding in my field.",
+        description="Rejecting superficial publish-or-perish vanity in favor of rigor.",
+        is_non_negotiable=True,
+        display_order=1,
+        is_sample=as_sample,
+    )
+
+    domain_intellect = Domain.objects.create(
+        framework=framework,
+        name="Intellectual Margin & Well-being",
+        description="Protecting cognitive health, deep sleep, and non-academic wonder.",
+        display_order=2,
+        is_sample=as_sample,
+    )
+    why_intellect = Why.objects.create(
+        domain=domain_intellect,
+        title="To keep curiosity alive and guard against academic cynicism and burnout.",
+        description="Maintaining healthy boundaries around working hours and criticism.",
+        is_non_negotiable=False,
+        display_order=1,
+        is_sample=as_sample,
+    )
+
+    obj_manuscript = Objective.objects.create(
+        primary_domain=domain_scholarship,
+        title="Complete and submit peer-reviewed monograph or dissertation chapters.",
+        description="Consistent four-hour morning deep work blocks without interruptions.",
+        status=StatusChoices.ACTIVE,
+        is_sample=as_sample,
+    )
+    obj_manuscript.whys.add(why_scholarship, why_intellect)
+    obj_manuscript.related_domains.add(domain_intellect)
+
+    Goal.objects.create(
+        primary_domain=domain_scholarship,
+        title="Write 1,000 words of draft manuscript 4 mornings per week.",
+        description="Disconnect internet router during drafting hours.",
+        status=StatusChoices.ACTIVE,
+        is_sample=as_sample,
+    )
+    return framework
+
+
+def seed_civic_stewardship_framework(user, as_sample: bool = True) -> Framework:
+    """Starter template: Civic Engagement, Community & Stewardship."""
+    framework = Framework.objects.create(
+        owner=user,
+        name="Civic Engagement & Community Stewardship",
+        description=(
+            "Balancing neighborhood volunteering, local governance, livelihood, and peace."
+        ),
+        is_sample=as_sample,
+    )
+
+    domain_community = Domain.objects.create(
+        framework=framework,
+        name="Local Community & Neighborhood",
+        description="Rooted presence, mutual aid, neighborhood trust, and civic duty.",
+        display_order=1,
+        is_sample=as_sample,
+    )
+    why_community = Why.objects.create(
+        domain=domain_community,
+        title="To contribute practically to the flourishing of my immediate neighborhood.",
+        description="Embodying active citizenship and solidarity with vulnerable neighbors.",
+        is_non_negotiable=True,
+        display_order=1,
+        is_sample=as_sample,
+    )
+
+    domain_peace = Domain.objects.create(
+        framework=framework,
+        name="Domestic Peace & Household Runway",
+        description="Maintaining household simplicity and non-reactive digital boundaries.",
+        display_order=2,
+        is_sample=as_sample,
+    )
+    why_peace = Why.objects.create(
+        domain=domain_peace,
+        title="To ground civic service in quiet personal and household integrity.",
+        description="Preventing external civic demands from eroding home stability.",
+        is_non_negotiable=False,
+        display_order=1,
+        is_sample=as_sample,
+    )
+
+    obj_civic = Objective.objects.create(
+        primary_domain=domain_community,
+        title="Facilitate monthly community mutual aid and neighborhood repairs.",
+        description="Build long-term local resilience without institutional overhead.",
+        status=StatusChoices.ACTIVE,
+        is_sample=as_sample,
+    )
+    obj_civic.whys.add(why_community, why_peace)
+    obj_civic.related_domains.add(domain_peace)
+
+    Goal.objects.create(
+        primary_domain=domain_community,
+        title="Organize quarterly community clean-up and street gathering.",
+        description="Engage at least 20 local households.",
+        status=StatusChoices.ACTIVE,
+        is_sample=as_sample,
+    )
+    return framework
+
+
+FRAMEWORK_TEMPLATES: list[dict[str, Any]] = [
+    {
+        "slug": "balanced_life",
+        "title": "Balanced Life & Priorities",
+        "subtitle": "Family & Home, Work & Vocation, Health & Well-being",
+        "season": "Everyday Life & Grounding",
+        "icon": "⚖️",
+        "description": (
+            "The classic PrioritySuite baseline: domestic stability, vocational "
+            "integrity, and holistic mental and physical well-being."
+        ),
+        "domains": ["Family and Home", "Work and Vocation", "Personal Health and Well-being"],
+        "builder": lambda user, as_sample: seed_sample_framework(user, as_sample=as_sample),
+    },
+    {
+        "slug": "career_transition",
+        "title": "Career & Vocation Transition",
+        "subtitle": "Creative Craft, Financial Runway & Autonomy",
+        "season": "Professional Pivots & Startups",
+        "icon": "🧭",
+        "description": (
+            "Explore new professional callings, early-stage ventures, or sabbatical "
+            "planning with explicit financial runway and craft autonomy."
+        ),
+        "domains": ["Creative Craft & Autonomy", "Runway & Financial Freedom"],
+        "builder": seed_career_transition_framework,
+    },
+    {
+        "slug": "creator_pace",
+        "title": "Independent Creator & Sustainable Pace",
+        "subtitle": "Writing, Publication & Sabbath Regeneration",
+        "season": "Creative Solopreneurs & Writers",
+        "icon": "✍️",
+        "description": (
+            "Balance thoughtful long-form publishing and independent craft with strict "
+            "burnout-proofing and digital detox boundaries."
+        ),
+        "domains": ["Publication & Expression", "Sabbath & Regeneration"],
+        "builder": seed_creator_framework,
+    },
+    {
+        "slug": "caregiving_support",
+        "title": "Parenting & Family Stewardship",
+        "subtitle": "Dependent Care, Aging Parents & Caregiver Renewal",
+        "season": "Seasons of Care & Responsibility",
+        "icon": "🏡",
+        "description": (
+            "Navigate the high demands of dependent care and family duty while intentionally "
+            "guarding caregiver health and renewal."
+        ),
+        "domains": ["Family & Dependent Care", "Caregiver Health & Renewal"],
+        "builder": seed_caregiving_framework,
+    },
+    {
+        "slug": "academic_deep_work",
+        "title": "Academic Research & Deep Work",
+        "subtitle": "Scholarly Rigor, Focused Writing & Cognitive Health",
+        "season": "Research, Thesis & Study",
+        "icon": "🔬",
+        "description": (
+            "Sustain deep scholarly investigation and manuscript completion without "
+            "succumbing to academic burnout or cynicism."
+        ),
+        "domains": ["Scholarly Rigor & Contribution", "Intellectual Margin & Well-being"],
+        "builder": seed_academic_deep_work_framework,
+    },
+    {
+        "slug": "civic_stewardship",
+        "title": "Civic Engagement & Community",
+        "subtitle": "Local Volunteering, Mutual Aid & Household Peace",
+        "season": "Community Contribution & Service",
+        "icon": "🤝",
+        "description": (
+            "Anchor meaningful neighborhood and community involvement in sustainable "
+            "domestic peace and quiet household simplicity."
+        ),
+        "domains": ["Local Community & Neighborhood", "Domestic Peace & Household Runway"],
+        "builder": seed_civic_stewardship_framework,
+    },
+]
+
+
+def seed_template_by_slug(user, slug: str, as_sample: bool = False) -> Framework:
+    """Finds and applies a template by its unique slug."""
+    for tmpl in FRAMEWORK_TEMPLATES:
+        if tmpl["slug"] == slug:
+            builder: Callable[..., Framework] = tmpl["builder"]
+            return builder(user, as_sample=as_sample)
+    raise ValueError(f"Unknown framework template slug: '{slug}'")
 
 
 def remove_sample_frameworks(user) -> int:
@@ -320,4 +603,3 @@ def remove_sample_frameworks(user) -> int:
     count = sample_frameworks.count()
     sample_frameworks.delete()
     return count
-

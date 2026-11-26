@@ -12,7 +12,15 @@ from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
 from decisions.models import DecisionRecord, LLMReflectionLog
-from frameworks.models import Domain, Framework, Goal, Objective, StatusChoices, Why
+from frameworks.models import (
+    Domain,
+    Framework,
+    FrameworkSnapshot,
+    Goal,
+    Objective,
+    StatusChoices,
+    Why,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +209,17 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                     }
                 )
 
+            snapshots_list = []
+            for snap in fw.snapshots.all():
+                snapshots_list.append(
+                    {
+                        "title": snap.title,
+                        "notes": snap.notes,
+                        "snapshot_data": snap.snapshot_data,
+                        "created_at": snap.created_at.isoformat() if snap.created_at else None,
+                    }
+                )
+
             frameworks_data.append(
                 {
                     "export_id": str(fw.id),
@@ -211,6 +230,7 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                     "domains": domains_list,
                     "decisions": decisions_list,
                     "reflections": reflections_list,
+                    "snapshots": snapshots_list,
                 }
             )
 
@@ -334,6 +354,19 @@ def _validate_vault_data(data: dict[str, Any]) -> None:
             created_at = ref.get("created_at")
             if created_at is not None and not isinstance(created_at, str):
                 raise ValueError("Reflection log created_at must be a string.")
+
+        # Validate snapshots
+        snapshots = fw.get("snapshots", [])
+        if not isinstance(snapshots, list):
+            raise ValueError(f"Snapshots in framework '{fw.get('name')}' must be a list.")
+        for snap in snapshots:
+            if not isinstance(snap, dict):
+                raise ValueError("Snapshot entry must be a dictionary.")
+            snap_created_at = snap.get("created_at")
+            if snap_created_at is not None and not isinstance(snap_created_at, str):
+                raise ValueError("Snapshot created_at must be a string.")
+            if "snapshot_data" in snap and not isinstance(snap["snapshot_data"], dict):
+                raise ValueError("Snapshot snapshot_data must be a dictionary.")
 
 
 def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
@@ -627,6 +660,24 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                 dt = parse_datetime(exported_created_at)
                 if dt:
                     LLMReflectionLog.objects.filter(id=ref_log.id).update(created_at=dt)
+
+        # 6. Create Snapshots
+        for snap_data in fw_data.get("snapshots", []):
+            snap = FrameworkSnapshot.objects.create(
+                framework=fw,
+                title=str(snap_data.get("title") or "Restored Snapshot"),
+                notes=str(snap_data.get("notes") or ""),
+                snapshot_data=(
+                    snap_data["snapshot_data"]
+                    if isinstance(snap_data.get("snapshot_data"), dict)
+                    else {}
+                ),
+            )
+            raw_snap_created = snap_data.get("created_at")
+            if raw_snap_created:
+                dt_snap = parse_datetime(raw_snap_created)
+                if dt_snap:
+                    FrameworkSnapshot.objects.filter(id=snap.id).update(created_at=dt_snap)
 
     return restored_count
 

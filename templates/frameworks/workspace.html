@@ -46,6 +46,9 @@
             <a href="{% url 'frameworks:domain_create' framework.id %}" class="btn btn-outline-primary btn-sm">+ Add Domain</a>
             <a href="{% url 'frameworks:objective_create' framework.id %}" class="btn btn-outline-secondary btn-sm">+ Add Objective</a>
             <a href="{% url 'frameworks:goal_create' framework.id %}" class="btn btn-outline-secondary btn-sm">+ Add Goal</a>
+            <a href="{% url 'frameworks:framework_map' framework.id %}" class="btn btn-outline-sage btn-sm" title="View interactive relationship map">🗺️ Map</a>
+            <a href="{% url 'frameworks:snapshot_list' framework.id %}" class="btn btn-outline-secondary btn-sm" title="Saved snapshots and historical changes">📸 History</a>
+            <a href="{% url 'frameworks:template_library' %}" class="btn btn-outline-secondary btn-sm" title="Browse curated life framework templates">📚 Templates</a>
             <a href="{% url 'llm:chat' framework.id %}" class="btn btn-outline-primary btn-sm" title="Consult Thinking Partner on this framework">💡 Thinking Partner</a>
             <a href="{% url 'exports:export_framework' framework.id %}" class="btn btn-outline-dark btn-sm">Export Markdown</a>
         </div>

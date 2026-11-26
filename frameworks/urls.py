@@ -62,4 +62,35 @@ urlpatterns = [
         views.mark_all_reviewed_view,
         name="mark_all_reviewed",
     ),
+    path("templates/", views.template_library_view, name="template_library"),
+    path(
+        "templates/apply/<str:slug>/",
+        views.template_apply_view,
+        name="template_apply",
+    ),
+    path(
+        "framework/<int:framework_id>/map/",
+        views.framework_map_view,
+        name="framework_map",
+    ),
+    path(
+        "framework/<int:framework_id>/history/",
+        views.snapshot_list_view,
+        name="snapshot_list",
+    ),
+    path(
+        "framework/<int:framework_id>/history/create/",
+        views.snapshot_create_view,
+        name="snapshot_create",
+    ),
+    path(
+        "framework/<int:framework_id>/history/<int:snapshot_id>/",
+        views.snapshot_compare_view,
+        name="snapshot_compare",
+    ),
+    path(
+        "history/<int:snapshot_id>/delete/",
+        views.snapshot_delete_view,
+        name="snapshot_delete",
+    ),
 ]
