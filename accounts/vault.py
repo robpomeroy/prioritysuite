@@ -100,6 +100,9 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                             "title": obj.title,
                             "description": obj.description,
                             "status": obj.status,
+                            "created_at": (
+                                obj.created_at.isoformat() if obj.created_at else None
+                            ),
                             "whys": [w.title for w in obj.whys.all()],
                             "why_ids": [str(w.id) for w in obj.whys.all()],
                             "related_domains": [rd.name for rd in valid_related_domains],
@@ -121,6 +124,7 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                             "title": g.title,
                             "description": g.description,
                             "status": g.status,
+                            "created_at": g.created_at.isoformat() if g.created_at else None,
                             "target_date": g.target_date.isoformat() if g.target_date else None,
                             "objectives": [o.title for o in g.objectives.all()],
                             "objective_ids": [str(o.id) for o in g.objectives.all()],
@@ -199,6 +203,7 @@ def serialize_user_data(user: User) -> dict[str, Any]:
                     "name": fw.name,
                     "description": fw.description,
                     "is_sample": fw.is_sample,
+                    "created_at": fw.created_at.isoformat() if fw.created_at else None,
                     "domains": domains_list,
                     "decisions": decisions_list,
                     "reflections": reflections_list,
@@ -249,6 +254,9 @@ def _validate_vault_data(data: dict[str, Any]) -> None:
     for fw in frameworks:
         if not isinstance(fw, dict):
             raise ValueError("Framework entry in vault payload must be a dictionary.")
+        fw_created_at = fw.get("created_at")
+        if fw_created_at is not None and not isinstance(fw_created_at, str):
+            raise ValueError(f"Framework '{fw.get('name')}' created_at must be a string.")
 
         domains = fw.get("domains", [])
         if not isinstance(domains, list):
@@ -273,6 +281,11 @@ def _validate_vault_data(data: dict[str, Any]) -> None:
             for obj in objectives:
                 if not isinstance(obj, dict):
                     raise ValueError("Objective entry must be a dictionary.")
+                created_at = obj.get("created_at")
+                if created_at is not None and not isinstance(created_at, str):
+                    raise ValueError(
+                        f"Objective '{obj.get('title')}' created_at must be a string."
+                    )
                 why_ids = obj.get("why_ids")
                 if why_ids is not None and not isinstance(why_ids, list):
                     raise ValueError(f"Objective '{obj.get('title')}' why_ids must be a list.")
@@ -289,6 +302,9 @@ def _validate_vault_data(data: dict[str, Any]) -> None:
             for g in goals:
                 if not isinstance(g, dict):
                     raise ValueError("Goal entry must be a dictionary.")
+                created_at = g.get("created_at")
+                if created_at is not None and not isinstance(created_at, str):
+                    raise ValueError(f"Goal '{g.get('title')}' created_at must be a string.")
                 obj_ids = g.get("objective_ids")
                 if obj_ids is not None and not isinstance(obj_ids, list):
                     raise ValueError(f"Goal '{g.get('title')}' objective_ids must be a list.")
@@ -330,6 +346,12 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
             is_sample=bool(fw_data.get("is_sample", False)),
         )
         restored_count += 1
+
+        raw_fw_created_at = fw_data.get("created_at")
+        if raw_fw_created_at:
+            dt = parse_datetime(raw_fw_created_at)
+            if dt:
+                Framework.objects.filter(id=fw.id).update(created_at=dt)
 
         domains_by_id: dict[str, Domain] = {}
         domains_by_name: dict[str, Domain] = {}
@@ -383,6 +405,12 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                     status=o_data.get("status", StatusChoices.ACTIVE),
                     last_reviewed_at=o_data.get("last_reviewed_at"),
                 )
+                raw_obj_created_at = o_data.get("created_at")
+                if raw_obj_created_at:
+                    dt = parse_datetime(raw_obj_created_at)
+                    if dt:
+                        Objective.objects.filter(id=obj.id).update(created_at=dt)
+
                 o_export_id = o_data.get("export_id")
                 if o_export_id:
                     objectives_by_id[str(o_export_id)] = obj
@@ -436,6 +464,11 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                     target_date=g_data.get("target_date"),
                     last_reviewed_at=g_data.get("last_reviewed_at"),
                 )
+                raw_goal_created_at = g_data.get("created_at")
+                if raw_goal_created_at:
+                    dt = parse_datetime(raw_goal_created_at)
+                    if dt:
+                        Goal.objects.filter(id=goal.id).update(created_at=dt)
 
                 linked_objs = []
                 explicit_obj_ids = g_data.get("objective_ids")

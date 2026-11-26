@@ -3409,8 +3409,12 @@ def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
     )
     assert resp_bad_fields.status_code == 302
 
-    # Verify is_sample flag and original decision created_at are restored
+    # Verify is_sample flag and original decision/framework/objective created_at are restored
     assert fw.is_sample is True
+    assert fw.created_at is not None
     dec = fw.decisions.first()
     assert dec.created_at is not None
+    dom = fw.domains.first()
+    obj = dom.primary_objectives.first()
+    assert obj.created_at is not None
 
