@@ -3856,6 +3856,19 @@ def test_v050_framework_templates_library(client, user):
     assert fw_sample.is_sample is True
     assert fw_sample.domains.count() == 2
 
+    # Apply caregiving template as personal framework
+    resp_apply_caregiving = client.post(
+        "/frameworks/templates/apply/caregiving_support/",
+        {"as_sample": "false"},
+    )
+    assert resp_apply_caregiving.status_code == 302
+    fw_care = Framework.objects.get(
+        owner=user, name="Parenting, Caregiving & Family Stewardship"
+    )
+    assert fw_care.is_sample is False
+    assert fw_care.domains.count() == 2
+    assert fw_care.domains.first().whys.count() >= 1
+
     # Apply template as personal framework (not sample)
     resp_apply_live = client.post(
         "/frameworks/templates/apply/civic_stewardship/",
@@ -3941,7 +3954,7 @@ def test_v050_historical_snapshots_and_comparison(client, user):
     assert "Newly Added Objective in Live" in compare_content
     assert "Transitioned from" in compare_content
 
-    # 5. Vault serialization and restore preserves snapshots
+    # 5. Vault serialization and restore preserves snapshots and remaps internal IDs
     from accounts.vault import (
         create_encrypted_vault_payload,
         decrypt_and_restore_vault,
@@ -3958,7 +3971,28 @@ def test_v050_historical_snapshots_and_comparison(client, user):
     assert restored_snap.notes == "Testing snapshot creation and diffing."
     assert "domains" in restored_snap.snapshot_data
 
-    # 6. Delete snapshot
+    # Verify ID remapping: snapshot internal IDs should match the new DB IDs of restored items
+    restored_dom = restored_fw.domains.first()
+    snap_dom_data = restored_snap.snapshot_data["domains"][0]
+    assert snap_dom_data["id"] == restored_dom.id
+    if snap_dom_data.get("goals"):
+        assert snap_dom_data["goals"][0]["id"] == restored_dom.primary_goals.first().id
+
+    # 6. Title bounding in snapshot create
+    resp_create_long = client.post(
+        f"/frameworks/framework/{fw.id}/history/create/",
+        {
+            "title": "A" * 300,
+            "notes": "Testing title length limit.",
+        },
+    )
+    assert resp_create_long.status_code == 302
+    long_snap = fw.snapshots.filter(notes="Testing title length limit.").first()
+    assert long_snap is not None
+    assert len(long_snap.title) == 200
+    assert long_snap.title == "A" * 200
+
+    # 7. Delete snapshot
     resp_del = client.post(f"/frameworks/history/{snap.id}/delete/")
     assert resp_del.status_code == 302
     assert FrameworkSnapshot.objects.filter(id=snap.id).count() == 0
@@ -4100,14 +4134,57 @@ def test_v050_historical_snapshots_and_comparison(client, user):
     diff_renamed = compare_framework_states(state_id_matched_old, state_id_matched_new)
     assert len(diff_renamed["modified_domains"]) == 1
     assert diff_renamed["modified_domains"][0]["name"] == "Wellbeing"
+    assert diff_renamed["modified_domains"][0]["old_name"] == "Health"
     assert len(diff_renamed["modified_whys"]) == 1
     assert diff_renamed["modified_whys"][0]["title"] == "New Why"
+    assert diff_renamed["modified_whys"][0]["old_title"] == "Old Why"
     assert len(diff_renamed["modified_objectives"]) == 1
     assert diff_renamed["modified_objectives"][0]["title"] == "New Obj"
+    assert diff_renamed["modified_objectives"][0]["old_title"] == "Old Obj"
     assert len(diff_renamed["modified_goals"]) == 1
     assert diff_renamed["modified_goals"][0]["title"] == "New Goal"
+    assert diff_renamed["modified_goals"][0]["old_title"] == "Old Goal"
     assert len(diff_renamed["modified_decisions"]) == 1
     assert diff_renamed["modified_decisions"][0]["title"] == "New Dec"
+    assert diff_renamed["modified_decisions"][0]["old_title"] == "Old Dec"
+
+    # Test domain reassignments detection across domains
+    state_domain_a = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Domain A",
+                "whys": [{"id": 10, "title": "Moveable Why"}],
+                "objectives": [{"id": 20, "title": "Moveable Obj"}],
+                "goals": [{"id": 30, "title": "Moveable Goal"}],
+            },
+            {"id": 2, "name": "Domain B", "whys": [], "objectives": [], "goals": []},
+        ],
+        "decisions": [],
+    }
+    state_domain_b = {
+        "domains": [
+            {"id": 1, "name": "Domain A", "whys": [], "objectives": [], "goals": []},
+            {
+                "id": 2,
+                "name": "Domain B",
+                "whys": [{"id": 10, "title": "Moveable Why"}],
+                "objectives": [{"id": 20, "title": "Moveable Obj"}],
+                "goals": [{"id": 30, "title": "Moveable Goal"}],
+            },
+        ],
+        "decisions": [],
+    }
+    diff_domain_move = compare_framework_states(state_domain_a, state_domain_b)
+    assert len(diff_domain_move["modified_whys"]) == 1
+    assert diff_domain_move["modified_whys"][0]["old_domain"] == "Domain A"
+    assert diff_domain_move["modified_whys"][0]["new_domain"] == "Domain B"
+    assert len(diff_domain_move["modified_objectives"]) == 1
+    assert diff_domain_move["modified_objectives"][0]["old_domain"] == "Domain A"
+    assert diff_domain_move["modified_objectives"][0]["new_domain"] == "Domain B"
+    assert len(diff_domain_move["modified_goals"]) == 1
+    assert diff_domain_move["modified_goals"][0]["old_domain"] == "Domain A"
+    assert diff_domain_move["modified_goals"][0]["new_domain"] == "Domain B"
 
     # Malformed snapshot payload validation in vault restore
     from accounts.vault import restore_user_data_from_dict

@@ -30,7 +30,7 @@
                 {% if user.is_authenticated %}
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.app_name == 'frameworks' and request.resolver_match.url_name in 'workspace,workspace_detail,domain_create,domain_edit,why_create,why_edit,objective_create,objective_edit,goal_create,goal_edit,framework_create,framework_edit' %}active fw-semibold text-terracotta{% endif %}" href="{% url 'frameworks:workspace' %}">Workspace</a>
+                        <a class="nav-link {% if request.resolver_match.app_name == 'frameworks' and request.resolver_match.url_name in 'workspace,workspace_detail,domain_create,domain_edit,why_create,why_edit,objective_create,objective_edit,goal_create,goal_edit,framework_create,framework_edit,template_library,framework_map,snapshot_list,snapshot_compare' %}active fw-semibold text-terracotta{% endif %}" href="{% url 'frameworks:workspace' %}">Workspace</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.app_name == 'decisions' and request.resolver_match.url_name in 'decision_list,decision_detail,decision_create,decision_edit' %}active fw-semibold text-terracotta{% endif %}" href="{% url 'decisions:decision_list' %}">Decision Assessments</a>

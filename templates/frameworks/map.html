@@ -105,7 +105,7 @@
                     <div class="d-flex align-items-center justify-content-between border-bottom pb-2 mb-3">
                         <h6 class="mb-0 fw-bold text-terracotta fs-5">🏛️ {{ domain.name }}</h6>
                         <span class="badge bg-secondary-subtle text-secondary small">
-                            {{ domain.whys.count }} Whys · {{ domain.primary_objectives.count }} Objectives · {{ domain.primary_goals.count }} Goals
+                            {{ domain.whys.all|length }} Whys · {{ domain.primary_objectives.all|length }} Objectives · {{ domain.primary_goals.all|length }} Goals
                         </span>
                     </div>
 

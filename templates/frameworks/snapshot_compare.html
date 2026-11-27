@@ -63,8 +63,17 @@
                 <h6 class="small fw-bold text-secondary text-uppercase mt-2 mb-1">📝 Revised Objectives</h6>
                 {% for obj in diff.modified_objectives %}
                     <div class="card p-2 mb-2 bg-light border-0 small">
-                        <span class="fw-semibold">{{ obj.title }}</span>
-                        <span class="text-muted small">Description or linked Whys / Domains updated</span>
+                        <span class="fw-semibold">
+                            {{ obj.title }}
+                            {% if obj.old_title and obj.old_title != obj.title %}
+                                <span class="text-muted fw-normal">(previously "{{ obj.old_title }}")</span>
+                            {% endif %}
+                        </span>
+                        {% if obj.old_domain and obj.new_domain and obj.old_domain != obj.new_domain %}
+                            <span class="text-terracotta small">Moved from domain <em>{{ obj.old_domain }}</em> to <em>{{ obj.new_domain }}</em></span>
+                        {% else %}
+                            <span class="text-muted small">Description, linked Whys, or related Domains updated</span>
+                        {% endif %}
                     </div>
                 {% endfor %}
             {% endif %}
@@ -115,8 +124,17 @@
                 <h6 class="small fw-bold text-secondary text-uppercase mt-2 mb-1">📝 Revised Goals</h6>
                 {% for goal in diff.modified_goals %}
                     <div class="card p-2 mb-2 bg-light border-0 small">
-                        <span class="fw-semibold">{{ goal.title }}</span>
-                        <span class="text-muted small">Description, target date, or linked Objectives / Domains updated</span>
+                        <span class="fw-semibold">
+                            {{ goal.title }}
+                            {% if goal.old_title and goal.old_title != goal.title %}
+                                <span class="text-muted fw-normal">(previously "{{ goal.old_title }}")</span>
+                            {% endif %}
+                        </span>
+                        {% if goal.old_domain and goal.new_domain and goal.old_domain != goal.new_domain %}
+                            <span class="text-terracotta small">Moved from domain <em>{{ goal.old_domain }}</em> to <em>{{ goal.new_domain }}</em></span>
+                        {% else %}
+                            <span class="text-muted small">Description, target date, or linked Objectives / Domains updated</span>
+                        {% endif %}
                     </div>
                 {% endfor %}
             {% endif %}
@@ -141,7 +159,12 @@
                     <div class="small text-danger mb-1">− Removed Domain: <strong>{{ d.name }}</strong></div>
                 {% endfor %}
                 {% for d in diff.modified_domains %}
-                    <div class="small text-secondary mb-1">📝 Revised Domain: <strong>{{ d.name }}</strong></div>
+                    <div class="small text-secondary mb-1">
+                        📝 Revised Domain: <strong>{{ d.name }}</strong>
+                        {% if d.old_name and d.old_name != d.name %}
+                            <span class="text-muted">(previously "{{ d.old_name }}")</span>
+                        {% endif %}
+                    </div>
                 {% endfor %}
                 {% for w in diff.added_whys %}
                     <div class="small text-success mb-1">+ Added Why: <strong>{{ w.title }}</strong></div>
@@ -150,7 +173,15 @@
                     <div class="small text-danger mb-1">− Removed Why: <strong>{{ w.title }}</strong></div>
                 {% endfor %}
                 {% for w in diff.modified_whys %}
-                    <div class="small text-secondary mb-1">📝 Revised Why: <strong>{{ w.title }}</strong></div>
+                    <div class="small text-secondary mb-1">
+                        📝 Revised Why: <strong>{{ w.title }}</strong>
+                        {% if w.old_title and w.old_title != w.title %}
+                            <span class="text-muted">(previously "{{ w.old_title }}")</span>
+                        {% endif %}
+                        {% if w.old_domain and w.new_domain and w.old_domain != w.new_domain %}
+                            <span class="text-terracotta">(moved: <em>{{ w.old_domain }}</em> → <em>{{ w.new_domain }}</em>)</span>
+                        {% endif %}
+                    </div>
                 {% endfor %}
             {% else %}
                 <div class="text-muted small fst-italic py-2">Domains and foundational Whys are unchanged.</div>
@@ -197,8 +228,13 @@
                 <h6 class="small fw-bold text-secondary text-uppercase mt-2 mb-1">📝 Revised Decisions</h6>
                 {% for dec in diff.modified_decisions %}
                     <div class="card p-2 mb-2 bg-light border-0 small">
-                        <span class="fw-semibold">{{ dec.title }}</span>
-                        <span class="text-muted small">Proposal description or decision outcome updated</span>
+                        <span class="fw-semibold">
+                            {{ dec.title }}
+                            {% if dec.old_title and dec.old_title != dec.title %}
+                                <span class="text-muted fw-normal">(previously "{{ dec.old_title }}")</span>
+                            {% endif %}
+                        </span>
+                        <span class="text-muted small">Proposal description, analysis, trade-offs, or linked priorities updated</span>
                     </div>
                 {% endfor %}
             {% endif %}

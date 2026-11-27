@@ -636,7 +636,7 @@ def snapshot_create_view(request, framework_id):
         return redirect("frameworks:snapshot_list", framework_id=framework_id)
 
     framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
-    title = (request.POST.get("title") or "").strip() or "Unnamed Snapshot"
+    title = (request.POST.get("title") or "").strip()[:200] or "Unnamed Snapshot"
     notes = (request.POST.get("notes") or "").strip()
 
     from frameworks.comparison import serialize_framework_for_snapshot

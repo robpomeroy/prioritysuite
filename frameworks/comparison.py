@@ -2,9 +2,22 @@ from typing import Any
 
 
 def serialize_framework_for_snapshot(framework) -> dict[str, Any]:
-    """Generates a canonical serialized dictionary of a single framework."""
+    """
+    Generates a canonical serialized dictionary of a single framework.
+    Uses prefetch_related to guarantee constant query execution count.
+    """
+    domains = list(
+        framework.domains.prefetch_related(
+            "whys",
+            "primary_objectives__whys",
+            "primary_objectives__related_domains",
+            "primary_goals__objectives",
+            "primary_goals__related_domains",
+        ).all()
+    )
+
     domains_list = []
-    for d in framework.domains.all():
+    for d in domains:
         whys_list = [
             {
                 "id": w.id,
@@ -54,15 +67,35 @@ def serialize_framework_for_snapshot(framework) -> dict[str, Any]:
             }
         )
 
+    decisions = list(
+        framework.decisions.prefetch_related(
+            "affected_domains",
+            "relevant_whys",
+            "supporting_objectives",
+            "conflicting_objectives",
+        ).all()
+    )
+
     decisions_list = [
         {
             "id": dec.id,
             "title": dec.title,
             "proposal_description": dec.proposal_description,
-            "status": dec.status,
+            "benefits_and_costs": dec.benefits_and_costs,
+            "alternatives_considered": dec.alternatives_considered,
+            "unresolved_questions": dec.unresolved_questions,
             "decision_outcome": dec.decision_outcome,
+            "status": dec.status,
+            "affected_domains": [ad.name for ad in dec.affected_domains.all()],
+            "relevant_whys": [rw.title for rw in dec.relevant_whys.all()],
+            "supporting_objectives": [
+                so.title for so in dec.supporting_objectives.all()
+            ],
+            "conflicting_objectives": [
+                co.title for co in dec.conflicting_objectives.all()
+            ],
         }
-        for dec in framework.decisions.all()
+        for dec in decisions
     ]
 
     return {
@@ -86,21 +119,25 @@ def _match_records_and_diff(
     """
     Matches records between snapshot and live state by stable id if available,
     or falls back to title/name matching with support for duplicate titles.
+    Defensively ignores non-dict items.
     Returns: (added_items, removed_items, matched_pairs)
     """
+    clean_live = [item for item in live_items if isinstance(item, dict)]
+    clean_snap = [item for item in snap_items if isinstance(item, dict)]
+
     live_by_id = {}
     snap_by_id = {}
     live_unmatched = []
     snap_unmatched = []
 
-    for item in live_items:
+    for item in clean_live:
         iid = item.get("id")
         if iid is not None:
             live_by_id[str(iid)] = item
         else:
             live_unmatched.append(item)
 
-    for item in snap_items:
+    for item in clean_snap:
         iid = item.get("id")
         if iid is not None:
             snap_by_id[str(iid)] = item
@@ -143,6 +180,13 @@ def _match_records_and_diff(
     return unmatched_live, rem_snap, matched_pairs
 
 
+def _safe_str_list(val: Any) -> list[str]:
+    """Coerces an arbitrary value safely into a list of strings."""
+    if not isinstance(val, (list, tuple, set)):
+        return []
+    return [str(x) for x in val if x is not None]
+
+
 def compare_framework_states(
     snapshot_state: dict[str, Any], live_state: dict[str, Any]
 ) -> dict[str, Any]:
@@ -175,9 +219,23 @@ def compare_framework_states(
         "modified_decisions": [],
     }
 
+    if not isinstance(snapshot_state, dict) or not isinstance(live_state, dict):
+        return diff
+
     # Domains
-    snap_domains = snapshot_state.get("domains", []) or []
-    live_domains = live_state.get("domains", []) or []
+    raw_snap_domains = snapshot_state.get("domains")
+    raw_live_domains = live_state.get("domains")
+    snap_domains = (
+        [d for d in raw_snap_domains if isinstance(d, dict)]
+        if isinstance(raw_snap_domains, list)
+        else []
+    )
+    live_domains = (
+        [d for d in raw_live_domains if isinstance(d, dict)]
+        if isinstance(raw_live_domains, list)
+        else []
+    )
+
     add_doms, rem_doms, matched_doms = _match_records_and_diff(
         snap_domains, live_domains, "name"
     )
@@ -186,15 +244,32 @@ def compare_framework_states(
     for d in rem_doms:
         diff["removed_domains"].append({"name": d.get("name")})
     for s_dom, l_dom in matched_doms:
-        if (
-            s_dom.get("name") != l_dom.get("name")
-            or (s_dom.get("description") or "") != (l_dom.get("description") or "")
-        ):
-            diff["modified_domains"].append({"name": l_dom.get("name")})
+        name_changed = s_dom.get("name") != l_dom.get("name")
+        desc_changed = (s_dom.get("description") or "") != (
+            l_dom.get("description") or ""
+        )
+        if name_changed or desc_changed:
+            entry: dict[str, Any] = {"name": l_dom.get("name")}
+            if name_changed:
+                entry["old_name"] = s_dom.get("name")
+            diff["modified_domains"].append(entry)
 
-    # Whys
-    snap_whys = [w for d in snap_domains for w in (d.get("whys") or [])]
-    live_whys = [w for d in live_domains for w in (d.get("whys") or [])]
+    # Whys (track parent domain to detect reassignments)
+    def _extract_whys(domains: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        whys = []
+        for d in domains:
+            d_name = d.get("name") or "Unnamed Domain"
+            raw_whys = d.get("whys")
+            if isinstance(raw_whys, list):
+                for w in raw_whys:
+                    if isinstance(w, dict):
+                        w_copy = dict(w)
+                        w_copy["domain"] = d_name
+                        whys.append(w_copy)
+        return whys
+
+    snap_whys = _extract_whys(snap_domains)
+    live_whys = _extract_whys(live_domains)
     add_whys, rem_whys, matched_whys = _match_records_and_diff(
         snap_whys, live_whys, "title"
     )
@@ -203,16 +278,41 @@ def compare_framework_states(
     for w in rem_whys:
         diff["removed_whys"].append({"title": w.get("title")})
     for s_why, l_why in matched_whys:
-        if (
-            s_why.get("title") != l_why.get("title")
-            or (s_why.get("description") or "") != (l_why.get("description") or "")
-            or s_why.get("is_non_negotiable") != l_why.get("is_non_negotiable")
-        ):
-            diff["modified_whys"].append({"title": l_why.get("title")})
+        title_changed = s_why.get("title") != l_why.get("title")
+        desc_changed = (s_why.get("description") or "") != (
+            l_why.get("description") or ""
+        )
+        non_neg_changed = s_why.get("is_non_negotiable") != l_why.get(
+            "is_non_negotiable"
+        )
+        domain_changed = s_why.get("domain") != l_why.get("domain")
+        if title_changed or desc_changed or non_neg_changed or domain_changed:
+            entry = {"title": l_why.get("title")}
+            if title_changed:
+                entry["old_title"] = s_why.get("title")
+            if domain_changed:
+                entry["old_domain"] = s_why.get("domain")
+                entry["new_domain"] = l_why.get("domain")
+            diff["modified_whys"].append(entry)
 
-    # Objectives
-    snap_objs = [obj for d in snap_domains for obj in (d.get("objectives") or [])]
-    live_objs = [obj for d in live_domains for obj in (d.get("objectives") or [])]
+    # Objectives (track parent domain to detect reassignments)
+    def _extract_objectives(
+        domains: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        objs = []
+        for d in domains:
+            d_name = d.get("name") or "Unnamed Domain"
+            raw_objs = d.get("objectives")
+            if isinstance(raw_objs, list):
+                for obj in raw_objs:
+                    if isinstance(obj, dict):
+                        obj_copy = dict(obj)
+                        obj_copy["domain"] = d_name
+                        objs.append(obj_copy)
+        return objs
+
+    snap_objs = _extract_objectives(snap_domains)
+    live_objs = _extract_objectives(live_domains)
     add_objs, rem_objs, matched_objs = _match_records_and_diff(
         snap_objs, live_objs, "title"
     )
@@ -233,18 +333,48 @@ def compare_framework_states(
                     "new_status": l_obj.get("status"),
                 }
             )
+        title_changed = s_obj.get("title") != l_obj.get("title")
+        desc_changed = (s_obj.get("description") or "") != (
+            l_obj.get("description") or ""
+        )
+        whys_changed = set(_safe_str_list(s_obj.get("whys"))) != set(
+            _safe_str_list(l_obj.get("whys"))
+        )
+        rd_changed = set(
+            _safe_str_list(s_obj.get("related_domains"))
+        ) != set(_safe_str_list(l_obj.get("related_domains")))
+        domain_changed = s_obj.get("domain") != l_obj.get("domain")
         if (
-            s_obj.get("title") != l_obj.get("title")
-            or (s_obj.get("description") or "") != (l_obj.get("description") or "")
-            or set(s_obj.get("whys") or []) != set(l_obj.get("whys") or [])
-            or set(s_obj.get("related_domains") or [])
-            != set(l_obj.get("related_domains") or [])
+            title_changed
+            or desc_changed
+            or whys_changed
+            or rd_changed
+            or domain_changed
         ):
-            diff["modified_objectives"].append({"title": l_obj.get("title")})
+            entry = {"title": l_obj.get("title")}
+            if title_changed:
+                entry["old_title"] = s_obj.get("title")
+            if domain_changed:
+                entry["old_domain"] = s_obj.get("domain")
+                entry["new_domain"] = l_obj.get("domain")
+            diff["modified_objectives"].append(entry)
 
-    # Goals
-    snap_goals = [g for d in snap_domains for g in (d.get("goals") or [])]
-    live_goals = [g for d in live_domains for g in (d.get("goals") or [])]
+    # Goals (track parent domain to detect reassignments)
+    def _extract_goals(domains: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        goals = []
+        for d in domains:
+            d_name = d.get("name") or "Unnamed Domain"
+            raw_goals = d.get("goals")
+            if isinstance(raw_goals, list):
+                for g in raw_goals:
+                    if isinstance(g, dict):
+                        g_copy = dict(g)
+                        g_copy["domain"] = d_name
+                        goals.append(g_copy)
+        return goals
+
+    snap_goals = _extract_goals(snap_domains)
+    live_goals = _extract_goals(live_domains)
     add_goals, rem_goals, matched_goals = _match_records_and_diff(
         snap_goals, live_goals, "title"
     )
@@ -265,19 +395,48 @@ def compare_framework_states(
                     "new_status": l_g.get("status"),
                 }
             )
+        title_changed = s_g.get("title") != l_g.get("title")
+        desc_changed = (s_g.get("description") or "") != (
+            l_g.get("description") or ""
+        )
+        target_date_changed = s_g.get("target_date") != l_g.get("target_date")
+        objs_changed = set(_safe_str_list(s_g.get("objectives"))) != set(
+            _safe_str_list(l_g.get("objectives"))
+        )
+        rd_changed = set(
+            _safe_str_list(s_g.get("related_domains"))
+        ) != set(_safe_str_list(l_g.get("related_domains")))
+        domain_changed = s_g.get("domain") != l_g.get("domain")
         if (
-            s_g.get("title") != l_g.get("title")
-            or (s_g.get("description") or "") != (l_g.get("description") or "")
-            or s_g.get("target_date") != l_g.get("target_date")
-            or set(s_g.get("objectives") or []) != set(l_g.get("objectives") or [])
-            or set(s_g.get("related_domains") or [])
-            != set(l_g.get("related_domains") or [])
+            title_changed
+            or desc_changed
+            or target_date_changed
+            or objs_changed
+            or rd_changed
+            or domain_changed
         ):
-            diff["modified_goals"].append({"title": l_g.get("title")})
+            entry = {"title": l_g.get("title")}
+            if title_changed:
+                entry["old_title"] = s_g.get("title")
+            if domain_changed:
+                entry["old_domain"] = s_g.get("domain")
+                entry["new_domain"] = l_g.get("domain")
+            diff["modified_goals"].append(entry)
 
     # Decisions
-    snap_decs = snapshot_state.get("decisions", []) or []
-    live_decs = live_state.get("decisions", []) or []
+    raw_snap_decs = snapshot_state.get("decisions")
+    raw_live_decs = live_state.get("decisions")
+    snap_decs = (
+        [d for d in raw_snap_decs if isinstance(d, dict)]
+        if isinstance(raw_snap_decs, list)
+        else []
+    )
+    live_decs = (
+        [d for d in raw_live_decs if isinstance(d, dict)]
+        if isinstance(raw_live_decs, list)
+        else []
+    )
+
     add_decs, rem_decs, matched_decs = _match_records_and_diff(
         snap_decs, live_decs, "title"
     )
@@ -298,13 +457,50 @@ def compare_framework_states(
                     "new_status": l_dec.get("status"),
                 }
             )
+        title_changed = s_dec.get("title") != l_dec.get("title")
+        desc_changed = (s_dec.get("proposal_description") or "") != (
+            l_dec.get("proposal_description") or ""
+        )
+        outcome_changed = (s_dec.get("decision_outcome") or "") != (
+            l_dec.get("decision_outcome") or ""
+        )
+        benefits_changed = (s_dec.get("benefits_and_costs") or "") != (
+            l_dec.get("benefits_and_costs") or ""
+        )
+        alts_changed = (s_dec.get("alternatives_considered") or "") != (
+            l_dec.get("alternatives_considered") or ""
+        )
+        unres_changed = (s_dec.get("unresolved_questions") or "") != (
+            l_dec.get("unresolved_questions") or ""
+        )
+        aff_doms_changed = set(
+            _safe_str_list(s_dec.get("affected_domains"))
+        ) != set(_safe_str_list(l_dec.get("affected_domains")))
+        rel_whys_changed = set(
+            _safe_str_list(s_dec.get("relevant_whys"))
+        ) != set(_safe_str_list(l_dec.get("relevant_whys")))
+        supp_objs_changed = set(
+            _safe_str_list(s_dec.get("supporting_objectives"))
+        ) != set(_safe_str_list(l_dec.get("supporting_objectives")))
+        conf_objs_changed = set(
+            _safe_str_list(s_dec.get("conflicting_objectives"))
+        ) != set(_safe_str_list(l_dec.get("conflicting_objectives")))
+
         if (
-            s_dec.get("title") != l_dec.get("title")
-            or (s_dec.get("proposal_description") or "")
-            != (l_dec.get("proposal_description") or "")
-            or (s_dec.get("decision_outcome") or "")
-            != (l_dec.get("decision_outcome") or "")
+            title_changed
+            or desc_changed
+            or outcome_changed
+            or benefits_changed
+            or alts_changed
+            or unres_changed
+            or aff_doms_changed
+            or rel_whys_changed
+            or supp_objs_changed
+            or conf_objs_changed
         ):
-            diff["modified_decisions"].append({"title": l_dec.get("title")})
+            entry = {"title": l_dec.get("title")}
+            if title_changed:
+                entry["old_title"] = s_dec.get("title")
+            diff["modified_decisions"].append(entry)
 
     return diff

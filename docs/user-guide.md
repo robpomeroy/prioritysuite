@@ -148,9 +148,9 @@ mode enabled:
 - **Periodic Refresh:** The instance automatically resets to a pristine baseline
   at regular intervals, safely clearing visitor test data.
 
-## 6. Predefined Life Templates, Relationship Map & Snapshots
+## 10. Predefined Life Templates, Relationship Map & Snapshots
 
-### 6.1 Template Library
+### 10.1 Template Library
 PrioritySuite provides a curated gallery of life framework templates tailored
 to common seasons of life (accessible via the **📚 Templates** toolbar button):
 - **Balanced Life & Priorities:** Domestic stability, vocational craft, health.
@@ -163,14 +163,14 @@ to common seasons of life (accessible via the **📚 Templates** toolbar button)
 Any template can be instantiated either as a private framework or as an
 exploratory sample.
 
-### 6.2 Relationship Map & Structural Alignment
+### 10.2 Relationship Map & Structural Alignment
 The **🗺️ Map** view visualises how your reasons and aspirations link together:
 - Follow the hierarchy from **Domains → Whys → Objectives → Goals**.
 - Spot **Unanchored Goals** (goals not anchored to an overarching objective).
 - Spot **Unexpressed Whys** (enduring reasons without active objectives).
 - Trace **Cross-Domain Bridges** where an objective spans multiple areas of life.
 
-### 6.3 Historical Snapshots & Version Comparison
+### 10.3 Historical Snapshots & Version Comparison
 Under **📸 History**, capture named point-in-time snapshots of your framework
 during periodic reviews. Compare any historical snapshot against your live
 framework to see what has been added, completed, paused, or revised. All

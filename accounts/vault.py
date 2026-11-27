@@ -370,11 +370,31 @@ def _validate_vault_data(data: dict[str, Any]) -> None:
                 if not isinstance(snap_data, dict):
                     raise ValueError("Snapshot snapshot_data must be a dictionary.")
                 snap_domains = snap_data.get("domains")
-                if snap_domains is not None and not isinstance(snap_domains, list):
-                    raise ValueError("Snapshot snapshot_data domains must be a list.")
+                if snap_domains is not None:
+                    if not isinstance(snap_domains, list):
+                        raise ValueError("Snapshot snapshot_data domains must be a list.")
+                    for dom in snap_domains:
+                        if not isinstance(dom, dict):
+                            raise ValueError("Snapshot domain entry must be a dictionary.")
+                        for child_key in ("whys", "objectives", "goals"):
+                            children = dom.get(child_key)
+                            if children is not None:
+                                if not isinstance(children, list):
+                                    raise ValueError(
+                                        f"Snapshot domain {child_key} must be a list."
+                                    )
+                                for child in children:
+                                    if not isinstance(child, dict):
+                                        raise ValueError(
+                                            f"Snapshot {child_key} item must be a dictionary."
+                                        )
                 snap_decs = snap_data.get("decisions")
-                if snap_decs is not None and not isinstance(snap_decs, list):
-                    raise ValueError("Snapshot snapshot_data decisions must be a list.")
+                if snap_decs is not None:
+                    if not isinstance(snap_decs, list):
+                        raise ValueError("Snapshot snapshot_data decisions must be a list.")
+                    for dec in snap_decs:
+                        if not isinstance(dec, dict):
+                            raise ValueError("Snapshot decision item must be a dictionary.")
 
 
 def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
@@ -404,6 +424,7 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
         whys_by_title: dict[str, Why] = {}
         objectives_by_id: dict[str, Objective] = {}
         objectives_by_title: dict[str, Objective] = {}
+        goals_by_id: dict[str, Goal] = {}
 
         # 1. Create Domains and Whys
         for d_data in fw_data.get("domains", []):
@@ -525,6 +546,10 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
                     target_date=g_data.get("target_date") or None,
                     last_reviewed_at=g_data.get("last_reviewed_at") or None,
                 )
+                g_export_id = g_data.get("export_id")
+                if g_export_id:
+                    goals_by_id[str(g_export_id)] = goal
+
                 raw_goal_created_at = g_data.get("created_at")
                 if raw_goal_created_at:
                     dt = parse_datetime(raw_goal_created_at)
@@ -671,15 +696,70 @@ def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:
 
         # 6. Create Snapshots
         for snap_data in fw_data.get("snapshots", []):
+            raw_snapshot_data = (
+                snap_data["snapshot_data"]
+                if isinstance(snap_data.get("snapshot_data"), dict)
+                else {}
+            )
+            # Deep-copy and remap legacy database IDs inside snapshot_data to match
+            # newly restored model IDs, setting unmatched IDs to None so they cleanly
+            # fall back to title-based comparison rather than colliding with
+            # unrelated auto-increment IDs.
+            import copy
+
+            remapped_snapshot_data = copy.deepcopy(raw_snapshot_data)
+            if "id" in remapped_snapshot_data:
+                remapped_snapshot_data["id"] = fw.id
+
+            for s_dom in remapped_snapshot_data.get("domains", []):
+                if not isinstance(s_dom, dict):
+                    continue
+                old_dom_id = s_dom.get("id")
+                s_dom["id"] = (
+                    domains_by_id[str(old_dom_id)].id
+                    if str(old_dom_id) in domains_by_id
+                    else None
+                )
+                for s_w in s_dom.get("whys", []):
+                    if isinstance(s_w, dict):
+                        old_w_id = s_w.get("id")
+                        s_w["id"] = (
+                            whys_by_id[str(old_w_id)].id
+                            if str(old_w_id) in whys_by_id
+                            else None
+                        )
+                for s_obj in s_dom.get("objectives", []):
+                    if isinstance(s_obj, dict):
+                        old_o_id = s_obj.get("id")
+                        s_obj["id"] = (
+                            objectives_by_id[str(old_o_id)].id
+                            if str(old_o_id) in objectives_by_id
+                            else None
+                        )
+                for s_g in s_dom.get("goals", []):
+                    if isinstance(s_g, dict):
+                        old_g_id = s_g.get("id")
+                        s_g["id"] = (
+                            goals_by_id[str(old_g_id)].id
+                            if str(old_g_id) in goals_by_id
+                            else None
+                        )
+
+            for s_dec in remapped_snapshot_data.get("decisions", []):
+                if isinstance(s_dec, dict):
+                    old_dec_id = s_dec.get("id")
+                    s_dec["id"] = (
+                        decisions_by_id[str(old_dec_id)].id
+                        if str(old_dec_id) in decisions_by_id
+                        else None
+                    )
+
+            snap_title = str(snap_data.get("title") or "Restored Snapshot")[:200]
             snap = FrameworkSnapshot.objects.create(
                 framework=fw,
-                title=str(snap_data.get("title") or "Restored Snapshot"),
+                title=snap_title,
                 notes=str(snap_data.get("notes") or ""),
-                snapshot_data=(
-                    snap_data["snapshot_data"]
-                    if isinstance(snap_data.get("snapshot_data"), dict)
-                    else {}
-                ),
+                snapshot_data=remapped_snapshot_data,
             )
             raw_snap_created = snap_data.get("created_at")
             if raw_snap_created:
