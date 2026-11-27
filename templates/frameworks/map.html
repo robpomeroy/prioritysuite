@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% block title %}Relationship Map — {{ framework.name }} — PrioritySuite{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-md-7">
+        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+            <h2 class="text-terracotta mb-0">Relationship Map</h2>
+            {% if user_frameworks and user_frameworks|length > 1 %}
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle text-terracotta fw-bold small px-2 py-1" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span>{{ framework.name }}</span>
+                    </button>
+                    <ul class="dropdown-menu shadow-sm">
+                        <li><h6 class="dropdown-header small text-uppercase">Switch Framework</h6></li>
+                        {% for uf in user_frameworks %}
+                            <li>
+                                <a class="dropdown-item {% if uf.id == framework.id %}active fw-semibold{% endif %}" href="{% url 'frameworks:framework_map' uf.id %}">
+                                    {{ uf.name }}{% if uf.is_sample %} <span class="badge bg-amber text-white ms-1">Sample</span>{% endif %}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+        <p class="text-muted small mb-0">
+            Visualise the connections across Domains, Whys, Objectives, and Goals for <strong>{{ framework.name }}</strong>.
+        </p>
+    </div>
+    <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex flex-wrap justify-content-md-end gap-2 align-items-center">
+        <a href="{% url 'frameworks:workspace_detail' framework.id %}" class="btn btn-sm btn-outline-secondary">
+            ← Return to Workspace
+        </a>
+    </div>
+</div>
+
+<!-- Diagnostics / Alignment Callout -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm border h-100 p-3 bg-light">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="small fw-bold text-uppercase text-terracotta">Unanchored Goals</span>
+                <span class="badge {% if graph_data.diagnostics.unanchored_goals %}bg-amber text-dark{% else %}bg-sage text-white{% endif %}">
+                    {{ graph_data.diagnostics.unanchored_goals|length }}
+                </span>
+            </div>
+            <p class="text-muted small mb-2">Goals not tied to an overarching Objective.</p>
+            {% for ug in graph_data.diagnostics.unanchored_goals %}
+                <div class="small text-truncate">• <strong>{{ ug.title }}</strong> <span class="text-muted">({{ ug.domain_name }})</span></div>
+            {% empty %}
+                <div class="small text-muted fst-italic">All goals are anchored to objectives.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow-sm border h-100 p-3 bg-light">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="small fw-bold text-uppercase text-amber">Unexpressed Whys</span>
+                <span class="badge {% if graph_data.diagnostics.unexpressed_whys %}bg-amber text-dark{% else %}bg-sage text-white{% endif %}">
+                    {{ graph_data.diagnostics.unexpressed_whys|length }}
+                </span>
+            </div>
+            <p class="text-muted small mb-2">Enduring Whys with no active Objectives yet.</p>
+            {% for uw in graph_data.diagnostics.unexpressed_whys %}
+                <div class="small text-truncate">
+                    • <strong>{{ uw.title }}</strong>
+                    {% if uw.is_non_negotiable %}<span class="badge badge-non-negotiable" style="font-size:0.65rem;">Non-Negotiable</span>{% endif %}
+                </div>
+            {% empty %}
+                <div class="small text-muted fst-italic">Every Why has one or more objectives.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow-sm border h-100 p-3 bg-light">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="small fw-bold text-uppercase text-sage">Cross-Domain Bridges</span>
+                <span class="badge bg-sage text-white">
+                    {{ graph_data.diagnostics.cross_domain_items|length }}
+                </span>
+            </div>
+            <p class="text-muted small mb-2">Items spanning multiple spheres of life.</p>
+            {% for cd in graph_data.diagnostics.cross_domain_items %}
+                <div class="small text-truncate">
+                    • <strong>{{ cd.title }}</strong>
+                    <span class="text-muted">({{ cd.primary }} ↔ {{ cd.related|join:", " }})</span>
+                </div>
+            {% empty %}
+                <div class="small text-muted fst-italic">No cross-domain bridges defined.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Interactive Domain-by-Domain Flow Map -->
+<div class="card shadow-sm border p-4 mb-4">
+    <h5 class="text-terracotta mb-3">Priority Flow Canvas</h5>
+    <div class="row g-4">
+        {% for domain in domains %}
+            <div class="col-lg-12">
+                <div class="border rounded p-3 bg-light-subtle">
+                    <div class="d-flex align-items-center justify-content-between border-bottom pb-2 mb-3">
+                        <h6 class="mb-0 fw-bold text-terracotta fs-5">🏛️ {{ domain.name }}</h6>
+                        <span class="badge bg-secondary-subtle text-secondary small">
+                            {{ domain.whys.all|length }} Whys · {{ domain.primary_objectives.all|length }} Objectives · {{ domain.primary_goals.all|length }} Goals
+                        </span>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Whys Column -->
+                        <div class="col-md-4">
+                            <span class="small fw-bold text-uppercase text-amber d-block mb-2">1. Enduring Whys</span>
+                            {% for why in domain.whys.all %}
+                                <div class="card card-why p-2 mb-2 border shadow-none small">
+                                    <div class="fw-semibold">
+                                        {{ why.title }}
+                                        {% if why.is_non_negotiable %}
+                                            <span class="badge badge-non-negotiable ms-1">Non-Negotiable</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if why.description %}
+                                        <div class="text-muted small mt-1">{{ why.description }}</div>
+                                    {% endif %}
+                                </div>
+                            {% empty %}
+                                <div class="text-muted small fst-italic">No Whys recorded.</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Objectives Column -->
+                        <div class="col-md-4">
+                            <span class="small fw-bold text-uppercase text-sage d-block mb-2">2. Strategic Objectives</span>
+                            {% for obj in domain.primary_objectives.all %}
+                                <div class="card card-objective p-2 mb-2 border shadow-none small">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <span class="fw-semibold">{{ obj.title }}</span>
+                                        <span class="badge bg-secondary-subtle text-secondary small">{{ obj.get_status_display }}</span>
+                                    </div>
+                                    <div class="mt-2 d-flex flex-wrap gap-1">
+                                        {% for w in obj.whys.all %}
+                                            <span class="badge badge-why small">Why: {{ w.title|truncatechars:20 }}</span>
+                                        {% empty %}
+                                            <span class="badge bg-warning-subtle text-warning-emphasis small">⚠️ No Why linked</span>
+                                        {% endfor %}
+                                        {% for rd in obj.related_domains.all %}
+                                            <span class="badge bg-light text-dark border small">↔ {{ rd.name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="text-muted small fst-italic">No Objectives defined.</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Goals Column -->
+                        <div class="col-md-4">
+                            <span class="small fw-bold text-uppercase text-terracotta d-block mb-2">3. Concrete Goals</span>
+                            {% for goal in domain.primary_goals.all %}
+                                <div class="card card-goal p-2 mb-2 border shadow-none small">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <span class="fw-semibold">{{ goal.title }}</span>
+                                        <span class="badge bg-primary-subtle text-primary small">{{ goal.get_status_display }}</span>
+                                    </div>
+                                    <div class="mt-2 d-flex flex-wrap gap-1">
+                                        {% for obj in goal.objectives.all %}
+                                            <span class="badge badge-objective small">Obj: {{ obj.title|truncatechars:20 }}</span>
+                                        {% empty %}
+                                            <span class="badge bg-warning-subtle text-warning-emphasis small">⚠️ Unanchored Goal</span>
+                                        {% endfor %}
+                                        {% for rd in goal.related_domains.all %}
+                                            <span class="badge bg-light text-dark border small">↔ {{ rd.name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="text-muted small fst-italic">No Goals set.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="col-12 text-center text-muted py-4">
+                No domains found in this framework.
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

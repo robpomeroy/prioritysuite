@@ -2955,7 +2955,7 @@ def test_version_display(client, user):
     resp = client.get("/accounts/settings/")
     assert resp.status_code == 200
     content = resp.content.decode()
-    assert "PrioritySuite v0.4.0" in content
+    assert "PrioritySuite v0.5.0" in content
 
 
 def test_registration_form_case_insensitive_duplicate_email(db):
@@ -3830,3 +3830,436 @@ def test_zero_knowledge_encrypted_vault_export_and_restore(client, user):
     assert leg_dec.conflicting_objectives.count() == 1
     assert leg_fw.reflections.count() == 1
     assert leg_fw.reflections.first().decision == leg_dec
+
+
+def test_v050_framework_templates_library(client, user):
+    """Test browsing and applying predefined life framework templates."""
+    client.force_login(user)
+    resp = client.get("/frameworks/templates/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "Predefined Life Framework Library" in content
+    assert "Balanced Life &amp; Priorities" in content
+    assert "Career &amp; Vocation Transition" in content
+    assert "Independent Creator &amp; Sustainable Pace" in content
+    assert "Parenting &amp; Family Stewardship" in content
+    assert "Academic Research &amp; Deep Work" in content
+    assert "Civic Engagement &amp; Community" in content
+
+    # Apply template as sample
+    resp_apply_sample = client.post(
+        "/frameworks/templates/apply/academic_deep_work/",
+        {"as_sample": "true"},
+    )
+    assert resp_apply_sample.status_code == 302
+    fw_sample = Framework.objects.get(owner=user, name="Academic Research & Deep Work")
+    assert fw_sample.is_sample is True
+    assert fw_sample.domains.count() == 2
+
+    # Apply caregiving template as personal framework
+    resp_apply_caregiving = client.post(
+        "/frameworks/templates/apply/caregiving_support/",
+        {"as_sample": "false"},
+    )
+    assert resp_apply_caregiving.status_code == 302
+    fw_care = Framework.objects.get(
+        owner=user, name="Parenting, Caregiving & Family Stewardship"
+    )
+    assert fw_care.is_sample is False
+    assert fw_care.domains.count() == 2
+    assert fw_care.domains.first().whys.count() >= 1
+
+    # Apply template as personal framework (not sample)
+    resp_apply_live = client.post(
+        "/frameworks/templates/apply/civic_stewardship/",
+        {"as_sample": "false"},
+    )
+    assert resp_apply_live.status_code == 302
+    fw_live = Framework.objects.get(owner=user, name="Civic Engagement & Community Stewardship")
+    assert fw_live.is_sample is False
+    assert fw_live.domains.count() == 2
+
+    # Unknown slug fails gracefully
+    resp_bad_slug = client.post(
+        "/frameworks/templates/apply/non_existent_slug/",
+        {"as_sample": "false"},
+    )
+    assert resp_bad_slug.status_code == 302
+
+
+def test_v050_relationship_map_and_diagnostics(client, user):
+    """Test interactive visual map data and alignment diagnostics."""
+    client.force_login(user)
+    from frameworks.services import seed_sample_framework
+    from frameworks.visualization import build_framework_graph
+
+    fw = seed_sample_framework(user, as_sample=False)
+    graph = build_framework_graph(fw)
+    assert graph["domain_count"] == 3
+    assert len(graph["nodes"]) > 0
+    assert len(graph["edges"]) > 0
+    assert "diagnostics" in graph
+    assert len(graph["decisions"]) == 1
+
+    resp = client.get(f"/frameworks/framework/{fw.id}/map/")
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    assert "Relationship Map" in content
+    assert "Unanchored Goals" in content
+    assert "Priority Flow Canvas" in content
+
+
+def test_v050_historical_snapshots_and_comparison(client, user):
+    """Test capturing snapshots, diffing evolution, and vault backup of snapshots."""
+    client.force_login(user)
+    from frameworks.models import FrameworkSnapshot, StatusChoices
+    from frameworks.services import seed_sample_framework
+
+    fw = seed_sample_framework(user, as_sample=False)
+
+    # 1. Capture snapshot
+    resp_create = client.post(
+        f"/frameworks/framework/{fw.id}/history/create/",
+        {
+            "title": "Baseline 2026 Snapshot",
+            "notes": "Testing snapshot creation and diffing.",
+        },
+    )
+    assert resp_create.status_code == 302
+    assert fw.snapshots.count() == 1
+    snap = fw.snapshots.first()
+    assert snap.title == "Baseline 2026 Snapshot"
+    assert str(snap) == f"Baseline 2026 Snapshot ({snap.created_at.strftime('%Y-%m-%d')})"
+
+    # 2. View snapshot list
+    resp_list = client.get(f"/frameworks/framework/{fw.id}/history/")
+    assert resp_list.status_code == 200
+    assert "Baseline 2026 Snapshot" in resp_list.content.decode()
+
+    # 3. Mutate live framework (add objective, change goal status)
+    dom = fw.domains.first()
+    dom.primary_objectives.create(
+        title="Newly Added Objective in Live",
+        status=StatusChoices.ACTIVE,
+    )
+    goal = dom.primary_goals.first()
+    goal.status = StatusChoices.COMPLETED
+    goal.save()
+
+    # 4. Compare snapshot vs live
+    resp_compare = client.get(f"/frameworks/framework/{fw.id}/history/{snap.id}/")
+    assert resp_compare.status_code == 200
+    compare_content = resp_compare.content.decode()
+    assert "Snapshot Comparison" in compare_content
+    assert "Newly Added Objective in Live" in compare_content
+    assert "Transitioned from" in compare_content
+
+    # 5. Vault serialization and restore preserves snapshots and remaps internal IDs
+    from accounts.vault import (
+        create_encrypted_vault_payload,
+        decrypt_and_restore_vault,
+    )
+
+    vault_payload = create_encrypted_vault_payload(user, "password123")
+    new_user = User.objects.create_user(username="snap_user", password="my_vault_password")
+    restored_count = decrypt_and_restore_vault(new_user, vault_payload, "password123")
+    assert restored_count >= 1
+    restored_fw = Framework.objects.get(owner=new_user, name=fw.name)
+    assert restored_fw.snapshots.count() == 1
+    restored_snap = restored_fw.snapshots.first()
+    assert restored_snap.title == "Baseline 2026 Snapshot"
+    assert restored_snap.notes == "Testing snapshot creation and diffing."
+    assert "domains" in restored_snap.snapshot_data
+
+    # Verify ID remapping: snapshot internal IDs should match the new DB IDs of restored items
+    restored_dom = restored_fw.domains.first()
+    snap_dom_data = restored_snap.snapshot_data["domains"][0]
+    assert snap_dom_data["id"] == restored_dom.id
+    if snap_dom_data.get("goals"):
+        assert snap_dom_data["goals"][0]["id"] == restored_dom.primary_goals.first().id
+
+    # 6. Title bounding in snapshot create
+    resp_create_long = client.post(
+        f"/frameworks/framework/{fw.id}/history/create/",
+        {
+            "title": "A" * 300,
+            "notes": "Testing title length limit.",
+        },
+    )
+    assert resp_create_long.status_code == 302
+    long_snap = fw.snapshots.filter(notes="Testing title length limit.").first()
+    assert long_snap is not None
+    assert len(long_snap.title) == 200
+    assert long_snap.title == "A" * 200
+
+    # 7. Delete snapshot
+    resp_del = client.post(f"/frameworks/history/{snap.id}/delete/")
+    assert resp_del.status_code == 302
+    assert FrameworkSnapshot.objects.filter(id=snap.id).count() == 0
+
+    # 7. Comparison diff engine edge cases (removed/added domain, whys, decisions)
+    from frameworks.comparison import compare_framework_states
+
+    state_old = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Same Title Domain",
+                "description": "Desc Old",
+                "whys": [
+                    {"id": 10, "title": "Stay healthy", "description": "Old Why Desc"}
+                ],
+                "objectives": [
+                    {
+                        "id": 100,
+                        "title": "Dual Objective",
+                        "status": "ACTIVE",
+                        "description": "Old Obj Desc",
+                    }
+                ],
+                "goals": [
+                    {
+                        "id": 1000,
+                        "title": "Dual Goal",
+                        "status": "ACTIVE",
+                        "description": "Old Goal Desc",
+                    }
+                ],
+            },
+            {
+                "id": 2,
+                "name": "Old Domain",
+                "whys": [{"id": 20, "title": "Stay healthy"}],
+                "objectives": [{"id": 200, "title": "Dual Objective", "status": "ACTIVE"}],
+                "goals": [{"id": 2000, "title": "Dual Goal", "status": "ACTIVE"}],
+            },
+        ],
+        "decisions": [
+            {
+                "id": 500,
+                "title": "Dec A",
+                "status": "EXPLORING",
+                "proposal_description": "Old Proposal",
+            }
+        ],
+    }
+    state_new = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Same Title Domain",
+                "description": "Desc New",
+                "whys": [
+                    {"id": 10, "title": "Stay healthy", "description": "New Why Desc"}
+                ],
+                "objectives": [
+                    {
+                        "id": 100,
+                        "title": "Dual Objective",
+                        "status": "COMPLETED",
+                        "description": "New Obj Desc",
+                    }
+                ],
+                "goals": [
+                    {
+                        "id": 1000,
+                        "title": "Dual Goal",
+                        "status": "COMPLETED",
+                        "description": "New Goal Desc",
+                    }
+                ],
+            },
+            {
+                "id": 3,
+                "name": "New Domain",
+                "whys": [{"id": 30, "title": "New Why"}],
+                "objectives": [{"id": 300, "title": "New Obj", "status": "ACTIVE"}],
+                "goals": [{"id": 3000, "title": "New Goal", "status": "ACTIVE"}],
+            },
+        ],
+        "decisions": [
+            {
+                "id": 500,
+                "title": "Dec A",
+                "status": "DECIDED",
+                "proposal_description": "New Proposal",
+            },
+            {"id": 501, "title": "Dec B", "status": "EXPLORING"},
+        ],
+    }
+    diff_edge = compare_framework_states(state_old, state_new)
+    assert len(diff_edge["added_domains"]) == 1
+    assert len(diff_edge["removed_domains"]) == 1
+    assert len(diff_edge["modified_domains"]) == 1
+    assert len(diff_edge["added_whys"]) == 1
+    assert len(diff_edge["removed_whys"]) == 1
+    assert len(diff_edge["modified_whys"]) == 1
+    assert len(diff_edge["added_objectives"]) == 1
+    assert len(diff_edge["removed_objectives"]) == 1
+    assert len(diff_edge["status_changed_objectives"]) == 1
+    assert len(diff_edge["modified_objectives"]) == 1
+    assert len(diff_edge["added_goals"]) == 1
+    assert len(diff_edge["removed_goals"]) == 1
+    assert len(diff_edge["status_changed_goals"]) == 1
+    assert len(diff_edge["modified_goals"]) == 1
+    assert len(diff_edge["added_decisions"]) == 1
+    assert len(diff_edge["status_changed_decisions"]) == 1
+    assert len(diff_edge["modified_decisions"]) == 1
+
+    # Test renamed items (matched by ID with changed title/name)
+    state_id_matched_old = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Health",
+                "whys": [{"id": 10, "title": "Old Why"}],
+                "objectives": [{"id": 100, "title": "Old Obj", "status": "ACTIVE"}],
+                "goals": [{"id": 1000, "title": "Old Goal", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [{"id": 500, "title": "Old Dec", "status": "EXPLORING"}],
+    }
+    state_id_matched_new = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Wellbeing",
+                "whys": [{"id": 10, "title": "New Why"}],
+                "objectives": [{"id": 100, "title": "New Obj", "status": "ACTIVE"}],
+                "goals": [{"id": 1000, "title": "New Goal", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [{"id": 500, "title": "New Dec", "status": "EXPLORING"}],
+    }
+    diff_renamed = compare_framework_states(state_id_matched_old, state_id_matched_new)
+    assert len(diff_renamed["modified_domains"]) == 1
+    assert diff_renamed["modified_domains"][0]["name"] == "Wellbeing"
+    assert diff_renamed["modified_domains"][0]["old_name"] == "Health"
+    assert len(diff_renamed["modified_whys"]) == 1
+    assert diff_renamed["modified_whys"][0]["title"] == "New Why"
+    assert diff_renamed["modified_whys"][0]["old_title"] == "Old Why"
+    assert "old_domain" not in diff_renamed["modified_whys"][0]
+    assert len(diff_renamed["modified_objectives"]) == 1
+    assert diff_renamed["modified_objectives"][0]["title"] == "New Obj"
+    assert diff_renamed["modified_objectives"][0]["old_title"] == "Old Obj"
+    assert "old_domain" not in diff_renamed["modified_objectives"][0]
+    assert len(diff_renamed["modified_goals"]) == 1
+    assert diff_renamed["modified_goals"][0]["title"] == "New Goal"
+    assert diff_renamed["modified_goals"][0]["old_title"] == "Old Goal"
+    assert "old_domain" not in diff_renamed["modified_goals"][0]
+    assert len(diff_renamed["modified_decisions"]) == 1
+    assert diff_renamed["modified_decisions"][0]["title"] == "New Dec"
+    assert diff_renamed["modified_decisions"][0]["old_title"] == "Old Dec"
+
+    # Test that renaming a domain WITHOUT changing child items does not flag children as modified
+    state_domain_rename_only_old = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Health",
+                "whys": [{"id": 10, "title": "Maintain Fitness"}],
+                "objectives": [{"id": 100, "title": "Run 5k", "status": "ACTIVE"}],
+                "goals": [{"id": 1000, "title": "Morning run", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [],
+    }
+    state_domain_rename_only_new = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Wellbeing",
+                "whys": [{"id": 10, "title": "Maintain Fitness"}],
+                "objectives": [{"id": 100, "title": "Run 5k", "status": "ACTIVE"}],
+                "goals": [{"id": 1000, "title": "Morning run", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [],
+    }
+    diff_dom_only = compare_framework_states(
+        state_domain_rename_only_old, state_domain_rename_only_new
+    )
+    assert len(diff_dom_only["modified_domains"]) == 1
+    assert diff_dom_only["modified_domains"][0]["name"] == "Wellbeing"
+    assert diff_dom_only["modified_domains"][0]["old_name"] == "Health"
+    assert len(diff_dom_only["modified_whys"]) == 0
+    assert len(diff_dom_only["modified_objectives"]) == 0
+    assert len(diff_dom_only["modified_goals"]) == 0
+
+    # Test domain reassignments detection across domains
+    state_domain_a = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Domain A",
+                "whys": [{"id": 10, "title": "Moveable Why"}],
+                "objectives": [{"id": 20, "title": "Moveable Obj"}],
+                "goals": [{"id": 30, "title": "Moveable Goal"}],
+            },
+            {"id": 2, "name": "Domain B", "whys": [], "objectives": [], "goals": []},
+        ],
+        "decisions": [],
+    }
+    state_domain_b = {
+        "domains": [
+            {"id": 1, "name": "Domain A", "whys": [], "objectives": [], "goals": []},
+            {
+                "id": 2,
+                "name": "Domain B",
+                "whys": [{"id": 10, "title": "Moveable Why"}],
+                "objectives": [{"id": 20, "title": "Moveable Obj"}],
+                "goals": [{"id": 30, "title": "Moveable Goal"}],
+            },
+        ],
+        "decisions": [],
+    }
+    diff_domain_move = compare_framework_states(state_domain_a, state_domain_b)
+    assert len(diff_domain_move["modified_whys"]) == 1
+    assert diff_domain_move["modified_whys"][0]["old_domain"] == "Domain A"
+    assert diff_domain_move["modified_whys"][0]["new_domain"] == "Domain B"
+    assert len(diff_domain_move["modified_objectives"]) == 1
+    assert diff_domain_move["modified_objectives"][0]["old_domain"] == "Domain A"
+    assert diff_domain_move["modified_objectives"][0]["new_domain"] == "Domain B"
+    assert len(diff_domain_move["modified_goals"]) == 1
+    assert diff_domain_move["modified_goals"][0]["old_domain"] == "Domain A"
+    assert diff_domain_move["modified_goals"][0]["new_domain"] == "Domain B"
+
+    # Malformed snapshot payload validation in vault restore
+    from accounts.vault import restore_user_data_from_dict
+
+    with pytest.raises(
+        ValueError, match="Snapshot snapshot_data domains must be a list"
+    ):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "snapshots": [
+                            {"title": "S", "snapshot_data": {"domains": "not-a-list"}}
+                        ],
+                    }
+                ]
+            },
+        )
+
+    with pytest.raises(
+        ValueError, match="Snapshot snapshot_data decisions must be a list"
+    ):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "snapshots": [
+                            {
+                                "title": "S",
+                                "snapshot_data": {"decisions": "not-a-list"},
+                            }
+                        ],
+                    }
+                ]
+            },
+        )

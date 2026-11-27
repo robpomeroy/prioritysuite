@@ -556,3 +556,142 @@ def mark_reviewed_view(request, item_type, item_id):
             else item.primary_domain.framework_id,
         )
     return HttpResponseForbidden()
+
+
+@login_required
+def template_library_view(request):
+    """Gallery of predefined life framework templates."""
+    from frameworks.services import FRAMEWORK_TEMPLATES
+
+    return render(
+        request,
+        "frameworks/template_library.html",
+        {"templates": FRAMEWORK_TEMPLATES},
+    )
+
+
+@login_required
+def template_apply_view(request, slug):
+    """Instantiates a chosen framework template for the user."""
+    if request.method != "POST":
+        return redirect("frameworks:template_library")
+
+    as_sample = request.POST.get("as_sample", "").lower() == "true"
+    from frameworks.services import seed_template_by_slug
+
+    try:
+        fw = seed_template_by_slug(request.user, slug, as_sample=as_sample)
+        messages.success(
+            request,
+            f"Instantiated '{fw.name}'. You can explore and modify it in your Workspace.",
+        )
+        return redirect("frameworks:workspace_detail", framework_id=fw.id)
+    except ValueError as err:
+        messages.error(request, str(err))
+        return redirect("frameworks:template_library")
+
+
+@login_required
+def framework_map_view(request, framework_id=None):
+    """Interactive visual relationship map and alignment diagnostics."""
+    framework = _get_user_framework(request.user, framework_id)
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
+    from frameworks.visualization import build_framework_graph
+
+    graph_data = build_framework_graph(framework)
+    return render(
+        request,
+        "frameworks/map.html",
+        {
+            "framework": framework,
+            "user_frameworks": user_frameworks,
+            "graph_data": graph_data,
+            "domains": graph_data.get("prefetched_domains", []),
+        },
+    )
+
+
+@login_required
+def snapshot_list_view(request, framework_id=None):
+    """Lists saved historical snapshots for a framework."""
+    framework = _get_user_framework(request.user, framework_id)
+    user_frameworks = Framework.objects.filter(owner=request.user).order_by("name")
+    snapshots = framework.snapshots.all()
+
+    return render(
+        request,
+        "frameworks/history.html",
+        {
+            "framework": framework,
+            "user_frameworks": user_frameworks,
+            "snapshots": snapshots,
+        },
+    )
+
+
+@login_required
+def snapshot_create_view(request, framework_id):
+    """Captures a point-in-time snapshot of the framework."""
+    if request.method != "POST":
+        return redirect("frameworks:snapshot_list", framework_id=framework_id)
+
+    framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
+    title = (request.POST.get("title") or "").strip()[:200] or "Unnamed Snapshot"
+    notes = (request.POST.get("notes") or "").strip()
+
+    from frameworks.comparison import serialize_framework_for_snapshot
+    from frameworks.models import FrameworkSnapshot
+
+    data = serialize_framework_for_snapshot(framework)
+    snap = FrameworkSnapshot.objects.create(
+        framework=framework,
+        title=title,
+        notes=notes,
+        snapshot_data=data,
+    )
+    messages.success(request, f"Saved snapshot '{snap.title}'.")
+    return redirect("frameworks:snapshot_list", framework_id=framework.id)
+
+
+@login_required
+def snapshot_compare_view(request, framework_id, snapshot_id):
+    """Compares a historical snapshot against current live framework data."""
+    framework = get_object_or_404(Framework, id=framework_id, owner=request.user)
+    snapshot = get_object_or_404(
+        framework.snapshots.model, id=snapshot_id, framework=framework
+    )
+
+    from frameworks.comparison import (
+        compare_framework_states,
+        serialize_framework_for_snapshot,
+    )
+
+    live_state = serialize_framework_for_snapshot(framework)
+    diff = compare_framework_states(snapshot.snapshot_data, live_state)
+
+    return render(
+        request,
+        "frameworks/snapshot_compare.html",
+        {
+            "framework": framework,
+            "snapshot": snapshot,
+            "diff": diff,
+        },
+    )
+
+
+@login_required
+def snapshot_delete_view(request, snapshot_id):
+    """Deletes a historical snapshot."""
+    from frameworks.models import FrameworkSnapshot
+
+    snap = get_object_or_404(
+        FrameworkSnapshot, id=snapshot_id, framework__owner=request.user
+    )
+    fw_id = snap.framework_id
+    title = snap.title
+    if request.method == "POST":
+        snap.delete()
+        messages.info(request, f"Deleted snapshot '{title}'.")
+    return redirect("frameworks:snapshot_list", framework_id=fw_id)
+

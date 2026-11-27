@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from frameworks.models import Domain, Framework, Goal, Objective, Why
+from frameworks.models import Domain, Framework, FrameworkSnapshot, Goal, Objective, Why
 
 
 class UserOwnedAdmin(admin.ModelAdmin):
@@ -162,3 +162,16 @@ class GoalAdmin(UserOwnedAdmin):
         elif db_field.name == "related_domains":
             kwargs["queryset"] = Domain.objects.filter(framework__owner=request.user)
         return super().formfield_for_manytomany(db_field, request, **kwargs)
+
+
+@admin.register(FrameworkSnapshot)
+class FrameworkSnapshotAdmin(UserOwnedAdmin):
+    list_display = ("title", "framework", "created_at")
+    list_filter = (("framework", admin.RelatedOnlyFieldListFilter), "created_at")
+    search_fields = ("title", "notes")
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "framework":
+            kwargs["queryset"] = Framework.objects.filter(owner=request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+

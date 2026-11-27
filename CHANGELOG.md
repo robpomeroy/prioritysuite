@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-26
+
+### Added
+- Predefined Life Framework Template Library (§11.2):
+  - Gallery of 6 curated starter frameworks tailored to common seasons of life
+    (Balanced Life, Career Transition, Independent Creator, Parenting & Family
+    Stewardship, Academic Research & Deep Work, Civic Engagement & Community).
+  - Users can preview and instantiate any template as an editable personal
+    framework or exploratory sample.
+- Interactive Relationship Map & Structural Alignment View (§11.2):
+  - Canvas mapping Domains -> Whys -> Objectives -> Goals flow.
+  - Structural diagnostics highlighting unanchored goals, unexpressed Whys, and
+    cross-domain bridges.
+- Historical Framework Snapshots & Version Comparison (§11.2):
+  - Named point-in-time framework snapshots with reflection notes.
+  - Side-by-side diff comparing historical snapshots against live frameworks.
+  - Encrypted vault backup support preserving snapshot history.
+
+### Changed
+- Bumped application version to 0.5.0 across project metadata and configuration.
+
 ## [0.4.0] - 2026-11-24
 
 ### Added

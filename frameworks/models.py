@@ -110,3 +110,26 @@ class Goal(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class FrameworkSnapshot(models.Model):
+    framework = models.ForeignKey(
+        Framework, on_delete=models.CASCADE, related_name="snapshots"
+    )
+    title = models.CharField(
+        max_length=200, help_text="A descriptive label for this point-in-time snapshot."
+    )
+    notes = models.TextField(
+        blank=True, default="", help_text="Optional context or reflection notes for this snapshot."
+    )
+    snapshot_data = models.JSONField(
+        help_text="Canonical JSON snapshot of the framework and its components."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.created_at.strftime('%Y-%m-%d')})"
+

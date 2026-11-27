@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Framework Template Library — PrioritySuite{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-md-8">
+        <h2 class="text-terracotta mb-1">Predefined Life Framework Library</h2>
+        <p class="text-muted small mb-0">
+            Choose from curated frameworks tailored to common seasons of life.
+            Instantiate any template as an editable personal framework, or explore it as a sample.
+        </p>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <a href="{% url 'frameworks:workspace' %}" class="btn btn-outline-secondary btn-sm">
+            ← Return to Workspace
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    {% for tmpl in templates %}
+        <div class="col-lg-6 col-xl-4">
+            <div class="card h-100 shadow-sm border card-template d-flex flex-column">
+                <div class="card-header bg-transparent pt-3 pb-2 border-0">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <span class="fs-4">{{ tmpl.icon }}</span>
+                        <span class="badge bg-light text-muted border small">{{ tmpl.season }}</span>
+                    </div>
+                    <h5 class="fw-bold text-terracotta mb-0">{{ tmpl.title }}</h5>
+                    <p class="small text-muted mb-0 mt-1">{{ tmpl.subtitle }}</p>
+                </div>
+                <div class="card-body py-2 flex-grow-1">
+                    <p class="small text-muted mb-3">{{ tmpl.description }}</p>
+                    <div class="small fw-semibold text-uppercase text-secondary mb-1" style="font-size: 0.75rem;">
+                        Domains Covered
+                    </div>
+                    <div class="d-flex flex-wrap gap-1 mb-3">
+                        {% for d in tmpl.domains %}
+                            <span class="badge bg-sage text-white small">{{ d }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-top p-3 d-flex gap-2">
+                    <form method="post" action="{% url 'frameworks:template_apply' tmpl.slug %}" class="flex-grow-1">
+                        {% csrf_token %}
+                        <input type="hidden" name="as_sample" value="false">
+                        <button type="submit" class="btn btn-sm btn-primary bg-terracotta border-0 w-100">
+                            Use as My Framework
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'frameworks:template_apply' tmpl.slug %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="as_sample" value="true">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Load as an exploratory sample (can be removed anytime)">
+                            Explore Sample
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}
