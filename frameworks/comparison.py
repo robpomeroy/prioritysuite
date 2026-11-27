@@ -186,7 +186,10 @@ def compare_framework_states(
     for d in rem_doms:
         diff["removed_domains"].append({"name": d.get("name")})
     for s_dom, l_dom in matched_doms:
-        if (s_dom.get("description") or "") != (l_dom.get("description") or ""):
+        if (
+            s_dom.get("name") != l_dom.get("name")
+            or (s_dom.get("description") or "") != (l_dom.get("description") or "")
+        ):
             diff["modified_domains"].append({"name": l_dom.get("name")})
 
     # Whys
@@ -201,7 +204,8 @@ def compare_framework_states(
         diff["removed_whys"].append({"title": w.get("title")})
     for s_why, l_why in matched_whys:
         if (
-            (s_why.get("description") or "") != (l_why.get("description") or "")
+            s_why.get("title") != l_why.get("title")
+            or (s_why.get("description") or "") != (l_why.get("description") or "")
             or s_why.get("is_non_negotiable") != l_why.get("is_non_negotiable")
         ):
             diff["modified_whys"].append({"title": l_why.get("title")})
@@ -230,7 +234,8 @@ def compare_framework_states(
                 }
             )
         if (
-            (s_obj.get("description") or "") != (l_obj.get("description") or "")
+            s_obj.get("title") != l_obj.get("title")
+            or (s_obj.get("description") or "") != (l_obj.get("description") or "")
             or set(s_obj.get("whys") or []) != set(l_obj.get("whys") or [])
             or set(s_obj.get("related_domains") or [])
             != set(l_obj.get("related_domains") or [])
@@ -261,7 +266,8 @@ def compare_framework_states(
                 }
             )
         if (
-            (s_g.get("description") or "") != (l_g.get("description") or "")
+            s_g.get("title") != l_g.get("title")
+            or (s_g.get("description") or "") != (l_g.get("description") or "")
             or s_g.get("target_date") != l_g.get("target_date")
             or set(s_g.get("objectives") or []) != set(l_g.get("objectives") or [])
             or set(s_g.get("related_domains") or [])
@@ -293,7 +299,8 @@ def compare_framework_states(
                 }
             )
         if (
-            (s_dec.get("proposal_description") or "")
+            s_dec.get("title") != l_dec.get("title")
+            or (s_dec.get("proposal_description") or "")
             != (l_dec.get("proposal_description") or "")
             or (s_dec.get("decision_outcome") or "")
             != (l_dec.get("decision_outcome") or "")

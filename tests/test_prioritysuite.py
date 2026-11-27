@@ -4072,6 +4072,43 @@ def test_v050_historical_snapshots_and_comparison(client, user):
     assert len(diff_edge["status_changed_decisions"]) == 1
     assert len(diff_edge["modified_decisions"]) == 1
 
+    # Test renamed items (matched by ID with changed title/name)
+    state_id_matched_old = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Health",
+                "whys": [{"id": 10, "title": "Old Why"}],
+                "objectives": [{"id": 100, "title": "Old Obj", "status": "ACTIVE"}],
+                "goals": [{"id": 1000, "title": "Old Goal", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [{"id": 500, "title": "Old Dec", "status": "EXPLORING"}],
+    }
+    state_id_matched_new = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Wellbeing",
+                "whys": [{"id": 10, "title": "New Why"}],
+                "objectives": [{"id": 100, "title": "New Obj", "status": "ACTIVE"}],
+                "goals": [{"id": 1000, "title": "New Goal", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [{"id": 500, "title": "New Dec", "status": "EXPLORING"}],
+    }
+    diff_renamed = compare_framework_states(state_id_matched_old, state_id_matched_new)
+    assert len(diff_renamed["modified_domains"]) == 1
+    assert diff_renamed["modified_domains"][0]["name"] == "Wellbeing"
+    assert len(diff_renamed["modified_whys"]) == 1
+    assert diff_renamed["modified_whys"][0]["title"] == "New Why"
+    assert len(diff_renamed["modified_objectives"]) == 1
+    assert diff_renamed["modified_objectives"][0]["title"] == "New Obj"
+    assert len(diff_renamed["modified_goals"]) == 1
+    assert diff_renamed["modified_goals"][0]["title"] == "New Goal"
+    assert len(diff_renamed["modified_decisions"]) == 1
+    assert diff_renamed["modified_decisions"][0]["title"] == "New Dec"
+
     # Malformed snapshot payload validation in vault restore
     from accounts.vault import restore_user_data_from_dict
 
