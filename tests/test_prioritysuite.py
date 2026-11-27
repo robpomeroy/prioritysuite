@@ -4138,15 +4138,53 @@ def test_v050_historical_snapshots_and_comparison(client, user):
     assert len(diff_renamed["modified_whys"]) == 1
     assert diff_renamed["modified_whys"][0]["title"] == "New Why"
     assert diff_renamed["modified_whys"][0]["old_title"] == "Old Why"
+    assert "old_domain" not in diff_renamed["modified_whys"][0]
     assert len(diff_renamed["modified_objectives"]) == 1
     assert diff_renamed["modified_objectives"][0]["title"] == "New Obj"
     assert diff_renamed["modified_objectives"][0]["old_title"] == "Old Obj"
+    assert "old_domain" not in diff_renamed["modified_objectives"][0]
     assert len(diff_renamed["modified_goals"]) == 1
     assert diff_renamed["modified_goals"][0]["title"] == "New Goal"
     assert diff_renamed["modified_goals"][0]["old_title"] == "Old Goal"
+    assert "old_domain" not in diff_renamed["modified_goals"][0]
     assert len(diff_renamed["modified_decisions"]) == 1
     assert diff_renamed["modified_decisions"][0]["title"] == "New Dec"
     assert diff_renamed["modified_decisions"][0]["old_title"] == "Old Dec"
+
+    # Test that renaming a domain WITHOUT changing child items does not flag children as modified
+    state_domain_rename_only_old = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Health",
+                "whys": [{"id": 10, "title": "Maintain Fitness"}],
+                "objectives": [{"id": 100, "title": "Run 5k", "status": "ACTIVE"}],
+                "goals": [{"id": 1000, "title": "Morning run", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [],
+    }
+    state_domain_rename_only_new = {
+        "domains": [
+            {
+                "id": 1,
+                "name": "Wellbeing",
+                "whys": [{"id": 10, "title": "Maintain Fitness"}],
+                "objectives": [{"id": 100, "title": "Run 5k", "status": "ACTIVE"}],
+                "goals": [{"id": 1000, "title": "Morning run", "status": "ACTIVE"}],
+            }
+        ],
+        "decisions": [],
+    }
+    diff_dom_only = compare_framework_states(
+        state_domain_rename_only_old, state_domain_rename_only_new
+    )
+    assert len(diff_dom_only["modified_domains"]) == 1
+    assert diff_dom_only["modified_domains"][0]["name"] == "Wellbeing"
+    assert diff_dom_only["modified_domains"][0]["old_name"] == "Health"
+    assert len(diff_dom_only["modified_whys"]) == 0
+    assert len(diff_dom_only["modified_objectives"]) == 0
+    assert len(diff_dom_only["modified_goals"]) == 0
 
     # Test domain reassignments detection across domains
     state_domain_a = {

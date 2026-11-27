@@ -259,12 +259,14 @@ def compare_framework_states(
         whys = []
         for d in domains:
             d_name = d.get("name") or "Unnamed Domain"
+            d_id = d.get("id")
             raw_whys = d.get("whys")
             if isinstance(raw_whys, list):
                 for w in raw_whys:
                     if isinstance(w, dict):
                         w_copy = dict(w)
                         w_copy["domain"] = d_name
+                        w_copy["domain_id"] = d_id
                         whys.append(w_copy)
         return whys
 
@@ -285,7 +287,12 @@ def compare_framework_states(
         non_neg_changed = s_why.get("is_non_negotiable") != l_why.get(
             "is_non_negotiable"
         )
-        domain_changed = s_why.get("domain") != l_why.get("domain")
+        s_dom_id = s_why.get("domain_id")
+        l_dom_id = l_why.get("domain_id")
+        if s_dom_id is not None and l_dom_id is not None:
+            domain_changed = str(s_dom_id) != str(l_dom_id)
+        else:
+            domain_changed = s_why.get("domain") != l_why.get("domain")
         if title_changed or desc_changed or non_neg_changed or domain_changed:
             entry = {"title": l_why.get("title")}
             if title_changed:
@@ -302,12 +309,14 @@ def compare_framework_states(
         objs = []
         for d in domains:
             d_name = d.get("name") or "Unnamed Domain"
+            d_id = d.get("id")
             raw_objs = d.get("objectives")
             if isinstance(raw_objs, list):
                 for obj in raw_objs:
                     if isinstance(obj, dict):
                         obj_copy = dict(obj)
                         obj_copy["domain"] = d_name
+                        obj_copy["domain_id"] = d_id
                         objs.append(obj_copy)
         return objs
 
@@ -343,7 +352,12 @@ def compare_framework_states(
         rd_changed = set(
             _safe_str_list(s_obj.get("related_domains"))
         ) != set(_safe_str_list(l_obj.get("related_domains")))
-        domain_changed = s_obj.get("domain") != l_obj.get("domain")
+        s_dom_id = s_obj.get("domain_id")
+        l_dom_id = l_obj.get("domain_id")
+        if s_dom_id is not None and l_dom_id is not None:
+            domain_changed = str(s_dom_id) != str(l_dom_id)
+        else:
+            domain_changed = s_obj.get("domain") != l_obj.get("domain")
         if (
             title_changed
             or desc_changed
@@ -364,12 +378,14 @@ def compare_framework_states(
         goals = []
         for d in domains:
             d_name = d.get("name") or "Unnamed Domain"
+            d_id = d.get("id")
             raw_goals = d.get("goals")
             if isinstance(raw_goals, list):
                 for g in raw_goals:
                     if isinstance(g, dict):
                         g_copy = dict(g)
                         g_copy["domain"] = d_name
+                        g_copy["domain_id"] = d_id
                         goals.append(g_copy)
         return goals
 
@@ -406,7 +422,12 @@ def compare_framework_states(
         rd_changed = set(
             _safe_str_list(s_g.get("related_domains"))
         ) != set(_safe_str_list(l_g.get("related_domains")))
-        domain_changed = s_g.get("domain") != l_g.get("domain")
+        s_dom_id = s_g.get("domain_id")
+        l_dom_id = l_g.get("domain_id")
+        if s_dom_id is not None and l_dom_id is not None:
+            domain_changed = str(s_dom_id) != str(l_dom_id)
+        else:
+            domain_changed = s_g.get("domain") != l_g.get("domain")
         if (
             title_changed
             or desc_changed
