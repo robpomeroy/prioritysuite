@@ -1,6 +1,6 @@
 from typing import Any
 
-from frameworks.models import Framework
+from frameworks.models import Framework, StatusChoices
 
 
 def build_framework_graph(framework: Framework) -> dict[str, Any]:
@@ -91,7 +91,8 @@ def build_framework_graph(framework: Framework) -> dict[str, Any]:
 
             linked_whys = list(obj.whys.all())
             for w in linked_whys:
-                all_whys_with_objectives.add(w.id)
+                if obj.status == StatusChoices.ACTIVE:
+                    all_whys_with_objectives.add(w.id)
                 edges.append(
                     {
                         "source": f"w_{w.id}",
@@ -100,7 +101,9 @@ def build_framework_graph(framework: Framework) -> dict[str, Any]:
                     }
                 )
 
-            rel_doms = [rd for rd in obj.related_domains.all() if rd.id in domain_ids]
+            rel_doms = [
+                rd for rd in obj.related_domains.all() if rd.id in domain_ids and rd.id != d.id
+            ]
             if rel_doms:
                 cross_domain_items.append(
                     {
@@ -159,7 +162,9 @@ def build_framework_graph(framework: Framework) -> dict[str, Any]:
                         }
                     )
 
-            rel_doms_goal = [rd for rd in g.related_domains.all() if rd.id in domain_ids]
+            rel_doms_goal = [
+                rd for rd in g.related_domains.all() if rd.id in domain_ids and rd.id != d.id
+            ]
             if rel_doms_goal:
                 cross_domain_items.append(
                     {
@@ -210,6 +215,7 @@ def build_framework_graph(framework: Framework) -> dict[str, Any]:
         "framework_id": framework.id,
         "framework_name": framework.name,
         "domain_count": len(domains),
+        "prefetched_domains": domains,
         "nodes": nodes,
         "edges": edges,
         "diagnostics": {

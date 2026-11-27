@@ -606,6 +606,7 @@ def framework_map_view(request, framework_id=None):
             "framework": framework,
             "user_frameworks": user_frameworks,
             "graph_data": graph_data,
+            "domains": graph_data.get("prefetched_domains", []),
         },
     )
 

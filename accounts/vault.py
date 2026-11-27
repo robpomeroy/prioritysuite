@@ -365,8 +365,16 @@ def _validate_vault_data(data: dict[str, Any]) -> None:
             snap_created_at = snap.get("created_at")
             if snap_created_at is not None and not isinstance(snap_created_at, str):
                 raise ValueError("Snapshot created_at must be a string.")
-            if "snapshot_data" in snap and not isinstance(snap["snapshot_data"], dict):
-                raise ValueError("Snapshot snapshot_data must be a dictionary.")
+            snap_data = snap.get("snapshot_data")
+            if snap_data is not None:
+                if not isinstance(snap_data, dict):
+                    raise ValueError("Snapshot snapshot_data must be a dictionary.")
+                snap_domains = snap_data.get("domains")
+                if snap_domains is not None and not isinstance(snap_domains, list):
+                    raise ValueError("Snapshot snapshot_data domains must be a list.")
+                snap_decs = snap_data.get("decisions")
+                if snap_decs is not None and not isinstance(snap_decs, list):
+                    raise ValueError("Snapshot snapshot_data decisions must be a list.")
 
 
 def restore_user_data_from_dict(user: User, data: dict[str, Any]) -> int:

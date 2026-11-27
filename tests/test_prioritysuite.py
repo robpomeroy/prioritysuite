@@ -3969,33 +3969,145 @@ def test_v050_historical_snapshots_and_comparison(client, user):
     state_old = {
         "domains": [
             {
+                "id": 1,
+                "name": "Same Title Domain",
+                "description": "Desc Old",
+                "whys": [
+                    {"id": 10, "title": "Stay healthy", "description": "Old Why Desc"}
+                ],
+                "objectives": [
+                    {
+                        "id": 100,
+                        "title": "Dual Objective",
+                        "status": "ACTIVE",
+                        "description": "Old Obj Desc",
+                    }
+                ],
+                "goals": [
+                    {
+                        "id": 1000,
+                        "title": "Dual Goal",
+                        "status": "ACTIVE",
+                        "description": "Old Goal Desc",
+                    }
+                ],
+            },
+            {
+                "id": 2,
                 "name": "Old Domain",
-                "whys": [{"title": "Old Why"}],
-                "objectives": [{"title": "Old Obj", "status": "ACTIVE"}],
-                "goals": [{"title": "Old Goal", "status": "ACTIVE"}],
+                "whys": [{"id": 20, "title": "Stay healthy"}],
+                "objectives": [{"id": 200, "title": "Dual Objective", "status": "ACTIVE"}],
+                "goals": [{"id": 2000, "title": "Dual Goal", "status": "ACTIVE"}],
+            },
+        ],
+        "decisions": [
+            {
+                "id": 500,
+                "title": "Dec A",
+                "status": "EXPLORING",
+                "proposal_description": "Old Proposal",
             }
         ],
-        "decisions": [{"title": "Old Dec", "status": "EXPLORING"}],
     }
     state_new = {
         "domains": [
             {
+                "id": 1,
+                "name": "Same Title Domain",
+                "description": "Desc New",
+                "whys": [
+                    {"id": 10, "title": "Stay healthy", "description": "New Why Desc"}
+                ],
+                "objectives": [
+                    {
+                        "id": 100,
+                        "title": "Dual Objective",
+                        "status": "COMPLETED",
+                        "description": "New Obj Desc",
+                    }
+                ],
+                "goals": [
+                    {
+                        "id": 1000,
+                        "title": "Dual Goal",
+                        "status": "COMPLETED",
+                        "description": "New Goal Desc",
+                    }
+                ],
+            },
+            {
+                "id": 3,
                 "name": "New Domain",
-                "whys": [{"title": "New Why"}],
-                "objectives": [{"title": "New Obj", "status": "COMPLETED"}],
-                "goals": [{"title": "New Goal", "status": "COMPLETED"}],
-            }
+                "whys": [{"id": 30, "title": "New Why"}],
+                "objectives": [{"id": 300, "title": "New Obj", "status": "ACTIVE"}],
+                "goals": [{"id": 3000, "title": "New Goal", "status": "ACTIVE"}],
+            },
         ],
-        "decisions": [{"title": "New Dec", "status": "DECIDED"}],
+        "decisions": [
+            {
+                "id": 500,
+                "title": "Dec A",
+                "status": "DECIDED",
+                "proposal_description": "New Proposal",
+            },
+            {"id": 501, "title": "Dec B", "status": "EXPLORING"},
+        ],
     }
     diff_edge = compare_framework_states(state_old, state_new)
     assert len(diff_edge["added_domains"]) == 1
     assert len(diff_edge["removed_domains"]) == 1
+    assert len(diff_edge["modified_domains"]) == 1
     assert len(diff_edge["added_whys"]) == 1
     assert len(diff_edge["removed_whys"]) == 1
+    assert len(diff_edge["modified_whys"]) == 1
     assert len(diff_edge["added_objectives"]) == 1
     assert len(diff_edge["removed_objectives"]) == 1
+    assert len(diff_edge["status_changed_objectives"]) == 1
+    assert len(diff_edge["modified_objectives"]) == 1
     assert len(diff_edge["added_goals"]) == 1
     assert len(diff_edge["removed_goals"]) == 1
+    assert len(diff_edge["status_changed_goals"]) == 1
+    assert len(diff_edge["modified_goals"]) == 1
     assert len(diff_edge["added_decisions"]) == 1
-    assert len(diff_edge["removed_decisions"]) == 1
+    assert len(diff_edge["status_changed_decisions"]) == 1
+    assert len(diff_edge["modified_decisions"]) == 1
+
+    # Malformed snapshot payload validation in vault restore
+    from accounts.vault import restore_user_data_from_dict
+
+    with pytest.raises(
+        ValueError, match="Snapshot snapshot_data domains must be a list"
+    ):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "snapshots": [
+                            {"title": "S", "snapshot_data": {"domains": "not-a-list"}}
+                        ],
+                    }
+                ]
+            },
+        )
+
+    with pytest.raises(
+        ValueError, match="Snapshot snapshot_data decisions must be a list"
+    ):
+        restore_user_data_from_dict(
+            new_user,
+            {
+                "frameworks": [
+                    {
+                        "name": "F",
+                        "snapshots": [
+                            {
+                                "title": "S",
+                                "snapshot_data": {"decisions": "not-a-list"},
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
